@@ -89,16 +89,6 @@ export function isBirthdayToday(dateOfBirth: string, today: string = todayStr())
 }
 
 /** Days until the next birthday (0 = today) */
-export function daysUntilBirthday(dateOfBirth: string, today: string = todayStr()): number {
-  const [by, bm, bd] = dateOfBirth.split("-").map(Number);
-  const [ty, tm, td] = today.split("-").map(Number);
-  let next = new Date(Date.UTC(ty, bm - 1, bd));
-  if (next.getTime() < Date.UTC(ty, tm - 1, td)) {
-    next = new Date(Date.UTC(ty + 1, bm - 1, bd));
-  }
-  return Math.round((next.getTime() - Date.UTC(ty, tm - 1, td)) / 86_400_000);
-}
-
 /** ISO date -> "Du", "Se", … for chart axis labels */
 export function dayShortLabel(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00Z");

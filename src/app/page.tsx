@@ -7,6 +7,9 @@ import Link from "next/link";
 import {
   ArrowRight,
   Award,
+  BookOpen,
+  Presentation,
+  Wand2,
   CalendarRange,
   ClipboardCheck,
   DoorOpen,
@@ -24,6 +27,7 @@ import {
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { Card, CardHeader } from "@/components/ui";
 import { repo } from "@/lib/repo";
+import { listBookMetas } from "@/lib/books/store";
 import {
   attendanceRateOn,
   averageGrade,
@@ -62,6 +66,12 @@ export default async function DashboardPage() {
   const dismissalData = dismissalBreakdown(dismissals, dismissalDate);
   const bdays = birthdaysToday(students, today);
   const upcoming = upcomingBirthdays(students, 7, today);
+  const bookMetas = await listBookMetas();
+  const bookStats = {
+    count: bookMetas.length,
+    games: bookMetas.reduce((s, b) => s + b.stats.games, 0),
+    items: bookMetas.reduce((s, b) => s + b.stats.items, 0),
+  };
 
   return (
     <div>
@@ -79,6 +89,65 @@ export default async function DashboardPage() {
       </div>
 
       <BirthdayBanner birthdays={bdays} upcoming={upcoming} />
+
+      {/* ---------------------- Kitoblar & o'yinlar banneri --------------------- */}
+      <Link
+        href="/books"
+        className="mb-5 flex flex-wrap items-center gap-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-4 text-white shadow-sm transition-transform hover:scale-[1.005]"
+      >
+        <div className="rounded-xl bg-white/15 p-2.5">
+          <BookOpen className="h-6 w-6" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold">Kitoblar va o'yinlar</p>
+          <p className="text-xs text-white/85">
+            Darslik PDF'ini yuklang — tizim mavzularga bo'lib, misollardan o'yin yasaydi
+          </p>
+        </div>
+        <div className="flex items-center gap-3 text-xs font-medium">
+          <span className="rounded-full bg-white/15 px-3 py-1">{bookStats.count} kitob</span>
+          <span className="rounded-full bg-white/15 px-3 py-1">{bookStats.games} o'yin</span>
+          <span className="hidden rounded-full bg-white/15 px-3 py-1 sm:inline">
+            {bookStats.items} savol
+          </span>
+          <ArrowRight className="h-4 w-4" />
+        </div>
+      </Link>
+
+      {/* ------------------- O'yin yasash / sinf bilan o'ynash ------------------ */}
+      <div className="mb-5 grid gap-3 sm:grid-cols-2">
+        <Link
+          href="/games"
+          className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition-all hover:border-violet-300 hover:shadow-sm"
+        >
+          <span className="rounded-xl bg-violet-50 p-2.5 text-violet-600">
+            <Wand2 className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-slate-900">O'z o'yiningizni yasang</span>
+            <span className="block text-xs text-slate-500">
+              13 xil o'yin turi · o'z so'zlaringiz va misollaringiz bilan
+            </span>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-violet-500" />
+        </Link>
+
+        <Link
+          href="/classroom"
+          className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition-all hover:border-amber-300 hover:shadow-sm"
+        >
+          <span className="rounded-xl bg-amber-50 p-2.5 text-amber-600">
+            <Presentation className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-slate-900">Sinf bilan o'ynash</span>
+            <span className="block text-xs text-slate-500">
+              Charxpalak · guruhlar viktorinasi · bingo kartalari
+            </span>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-amber-500" />
+        </Link>
+      </div>
 
       {/* ------------------------------- KPI cards ------------------------------ */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">

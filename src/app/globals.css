@@ -18,3 +18,49 @@ body {
 .thin-scroll::-webkit-scrollbar-thumb {
   @apply rounded-full bg-slate-300;
 }
+
+/* O'yin animatsiyalari */
+@keyframes pop {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes floatup {
+  0% {
+    transform: translate(-50%, 10px);
+  }
+  50% {
+    transform: translate(-50%, -10px);
+  }
+  100% {
+    transform: translate(-50%, 10px);
+  }
+}
+
+.balloon-float {
+  animation: floatup 3.5s ease-in-out infinite;
+}
+
+/* Bingo kartalarini chop etish uchun sahifa sozlamalari */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+  body {
+    background: #fff;
+  }
+  aside,
+  nav,
+  header {
+    display: none !important;
+  }
+}

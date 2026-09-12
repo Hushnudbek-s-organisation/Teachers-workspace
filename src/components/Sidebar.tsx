@@ -4,7 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  BookOpen,
   CalendarDays,
+  Presentation,
+  Wand2,
   ClipboardCheck,
   GraduationCap,
   LayoutDashboard,
@@ -21,6 +24,9 @@ const NAV = [
   { href: "/teachers", label: "O'qituvchilar", icon: GraduationCap },
   { href: "/schedule", label: "Dars jadvali", icon: CalendarDays },
   { href: "/daily", label: "Kunlik davomat", icon: ClipboardCheck },
+  { href: "/books", label: "Kitoblar & O'yinlar", icon: BookOpen },
+  { href: "/games", label: "O'yin yasash", icon: Wand2 },
+  { href: "/classroom", label: "Sinf bilan o'ynash", icon: Presentation },
   { href: "/analytics", label: "Tahlil", icon: BarChart3 },
 ];
 

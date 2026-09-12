@@ -25,3 +25,6 @@ next-env.d.ts
 
 # vercel
 .vercel
+
+# kitoblar moduli: yuklangan kitoblar va o'yin natijalari (runtime)
+/.data/
