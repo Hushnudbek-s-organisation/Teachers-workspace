@@ -10,12 +10,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:books": "tsx scripts/test-book-engine.mts",
+    "ingest": "node scripts/ingest-pdf.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
     "lucide-react": "^0.446.0",
     "next": "15.5.25",
+    "pdfjs-dist": "^4.6.82",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.15.0",
@@ -28,6 +31,7 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "tsx": "^4.19.2"
   }
 }
