@@ -3,8 +3,9 @@ import "server-only";
 // ============================================================================
 // Kitoblarni saqlash qatlami
 //
-//   • O'qituvchi yuklagan kitoblar — `.data/books/*.json` fayllarida
-//   • O'yin natijalari  — `.data/game-results.json`
+//   • Supabase sozlangan bo'lsa — `books` / `game_results` jadvallarida
+//   • Aks holda (.data papkasi mavjud bo'lsa) — fayllarda: `.data/books/*.json`
+//     va `.data/game-results.json`
 //
 // Diqqat: fayl tizimi serverda saqlanadi (Vercel kabi "read-only" muhitlarda
 // Supabase'ga ko'chirish kerak — README'ga qarang).
@@ -26,6 +27,16 @@ import { extractDefinitions } from "./extract";
 import { segmentBook, type BookPage, type SegmentReport } from "./segment";
 import { cleanExtractedText, keyphrases } from "./text";
 import { BOOK_KEYWORD_POOL, MAX_SAVED_RESULTS, UPLOAD_SESSION_TTL_MS } from "../config";
+import { isSupabaseConfigured } from "../repo";
+import {
+  dbDeleteBook,
+  dbGetBook,
+  dbListBookMetas,
+  dbListBooks,
+  dbListResults,
+  dbSaveBook,
+  dbSaveResult,
+} from "./db";
 
 const DATA_DIR = path.join(process.cwd(), ".data");
 const BOOKS_DIR = path.join(DATA_DIR, "books");
@@ -78,6 +89,7 @@ export function slugify(s: string): string {
 // ------------------------------ Kitoblar ro'yxati ---------------------------
 
 export async function listUploadedBooks(): Promise<Book[]> {
+  if (isSupabaseConfigured()) return dbListBooks();
   try {
     await ensureDir(BOOKS_DIR);
     const files = await fs.readdir(BOOKS_DIR);
@@ -93,15 +105,18 @@ export async function listUploadedBooks(): Promise<Book[]> {
 }
 
 export async function listBookMetas(): Promise<BookMeta[]> {
+  if (isSupabaseConfigured()) return dbListBookMetas();
   const uploaded = await listUploadedBooks();
   return uploaded.map(toMeta);
 }
 
 export async function getBook(id: string): Promise<Book | null> {
+  if (isSupabaseConfigured()) return dbGetBook(id);
   return readJson<Book>(path.join(BOOKS_DIR, `${slugify(id)}.json`));
 }
 
 export async function deleteBook(id: string): Promise<boolean> {
+  if (isSupabaseConfigured()) return dbDeleteBook(id);
   const file = path.join(BOOKS_DIR, `${slugify(id)}.json`);
   try {
     await fs.unlink(file);
@@ -223,6 +238,7 @@ export function ingestBook(input: IngestInput): IngestResult {
 }
 
 export async function saveBook(book: Book): Promise<void> {
+  if (isSupabaseConfigured()) return dbSaveBook(book);
   await writeJson(path.join(BOOKS_DIR, `${slugify(book.id)}.json`), book);
 }
 
@@ -298,12 +314,22 @@ export function finishUpload(id: string): { book: Book; report: SegmentReport } 
 // ---------------------------------------------------------------------------
 
 export async function listResults(bookId?: string): Promise<GameResult[]> {
+  if (isSupabaseConfigured()) return dbListResults(bookId);
   const all = (await readJson<GameResult[]>(RESULTS_FILE)) ?? [];
   const filtered = bookId ? all.filter((r) => r.bookId === bookId) : all;
   return filtered.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function saveResult(result: Omit<GameResult, "id" | "createdAt">): Promise<GameResult> {
+  if (isSupabaseConfigured()) {
+    const full: GameResult = {
+      ...result,
+      id: `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      createdAt: new Date().toISOString(),
+    };
+    await dbSaveResult(full);
+    return full;
+  }
   const all = (await readJson<GameResult[]>(RESULTS_FILE)) ?? [];
   const full: GameResult = {
     ...result,

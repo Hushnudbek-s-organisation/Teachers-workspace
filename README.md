@@ -5,8 +5,8 @@ Teacher & Admin Dashboard for a school management platform:
 
 | Bo'lim | Nima bor |
 | --- | --- |
-| **`supabase/schema.sql`** | **Task 1** — ENUM'lar, barcha jadvallar (FK + `ON DELETE CASCADE`), tahlil VIEW'lari, yordamchi funksiya, RLS |
-| **`supabase/seed.sql`** | Namoyish ma'lumotlari (shu jumladan bugun tug'ilgan kuni bo'lgan o'quvchi) |
+| **`supabase/schema.sql`** | **To'liq o'rnatish** — ENUM'lar, 10 jadval (maktab + `books`/`custom_games`/`game_results`), 7 VIEW, 2 funksiya, 40 RLS siyosati. **Qayta run qilish xavfsiz** (`create if not exists`) |
+| **`supabase/seed.sql`** | Namoyish ma'lumotlari: 6 o'qituvchi, 8 o'quvchi, davomat/baholar, bugun tug'ilgan kuni bo'lgan o'quvchi, 1 namuna kitob (5 mavzu / 17 o'yin) va 4 ta o'qituvchi o'yini. **Qayta run qilish xavfsiz** |
 | **`src/app/*` + `src/components/*`** | **Task 2** — Students / Parents / Teachers / Schedule CRUD, kunlik davomat, uyga ketish, baholash, birthday alert |
 | **`src/app/page.tsx` + `src/app/analytics`** | **Task 3** — Recharts dashboard: KPI kartalar, haftalik davomat grafigi, fanlar kesimida baholar, dismissal pie, hisobotlar |
 | **`src/lib/books/*` + `src/app/books/*`** | **Kitob → O'yin** — o'qituvchi yuklagan darslikni (PDF/matn) o'qib mavzularga bo'ladi va har bir mavzudan o'yinlar yasaydi (sinf va fan o'qituvchi tanlaydi) |
@@ -29,7 +29,10 @@ ishlaydi (server qayta ishga tushganda yangilanadi).
 ## 🔌 Supabase'ni ulash (real ma'lumotlar)
 
 1. [supabase.com](https://supabase.com) da yangi project yarating.
-2. **SQL Editor** → `supabase/schema.sql` tarkibini to'liq run qiling.
+2. **SQL Editor** → **New query** → `supabase/schema.sql` tarkibini to'liq qo'yib **Run** qiling.
+   Fayl oxirida tekshiruv so'rovlari bor — ular jadvallar/VIEW'lar/RLS yaratilganini ko'rsatadi.
+   Faylni **qayta run qilish ham xavfsiz** (hech narsa o'chirilmaydi).
+   Noldan boshlash kerak bo'lsa — fayldagi `FRESH RESET` bloki (kommentdan chiqarib run qilinadi).
 3. (Ixtiyoriy) `supabase/seed.sql` ni run qiling — namoyish ma'lumotlari uchun.
 4. `.env.local.example` faylini `.env.local` deb nusxalab to'ldiring:
 
@@ -40,10 +43,17 @@ ishlaydi (server qayta ishga tushganda yangilanadi).
    ```
 
 5. `npm run dev` — yon panel'da **«Supabase ulangan»** belgisi paydo bo'ladi.
+6. Tekshirish: `npm run test:supabase` — kitob → o'yin → natija zanjiri Supabase
+   yo'lidan o'tishini (so'rovlarni ushlab) va yozilgan qatorlarni sxema qabul
+   qilishini ko'rsatadi. Qo'shimcha: `npm i --no-save @electric-sql/pglite`.
 
-> **RLS:** sxemada `authenticated` role uchun to'liq CRUD politikalari bor.
-> Auth qo'shilgach, `SUPABASE_SERVICE_ROLE_KEY`'ni olib tashlab, `@supabase/ssr` +
-> aniq rollarga asoslangan politikalarga o'ting.
+> **RLS:** sxemada `authenticated` role uchun to'liq CRUD politikalari bor (40 ta).
+> Ilovada hozircha login sahifasi yo'q — shuning uchun serverda
+> `SUPABASE_SERVICE_ROLE_KEY` ishlatiladi (kalit brauzerga chiqmaydi).
+> Login qo'shgach, `@supabase/ssr` + aniq rollarga asoslangan politikalarga o'ting.
+> Login qo'shmasdan, faqat anon kalit bilan ishlatmoqchi bo'lsangiz — `schema.sql`
+> 7-bo'limidagi tayyor `anon` siyosatlar blokini kommentdan chiqaring (ogohlantirish
+> o'sha yerda yozilgan: anon kalit egasi o'qish **va** yozish huquqiga ega bo'ladi).
 
 ---
 
@@ -203,14 +213,16 @@ hisobini chiqaradi. Kitob hali yuklanmagan bo'lsa, shuni aytadi.
 
 ## Ma'lumotlar qayerda saqlanadi
 
-| Nima | Joy |
-| --- | --- |
-| Yuklangan kitoblar | `.data/books/*.json` (git'ga tushmaydi) |
-| O'yin natijalari | `.data/game-results.json` |
+| Nima | Supabase ulangan | Supabase'siz (demo) |
+| --- | --- | --- |
+| Maktab ma'lumotlari | `students`, `teachers`, ... | xotiradagi namoyish ma'lumotlari |
+| Yuklangan kitoblar | `books` jadvali (`topics` = jsonb) | `.data/books/*.json` (git'ga tushmaydi) |
+| O'yin natijalari | `game_results` jadvali | `.data/game-results.json` |
+| O'qituvchi o'yinlari | `custom_games` jadvali | `.data/custom-games.json` |
 
-> **Vercel/read-only muhitda** fayl tizimi ishlamaydi — bu holda `src/lib/books/store.ts`
-> dagi `saveBook`/`listUploadedBooks`/`saveResult` funksiyalarini Supabase jadvaliga
-> (`books`, `game_results`) o'tkazing. Interfeys o'zgarmaydi.
+> **Vercel/read-only muhitda** fayl tizimi ishlamaydi — shuning uchun Supabase
+> kalitlarini qo'ying: `src/lib/books/db.ts` (Supabase qatlami) avtomatik yoqiladi,
+> fayllar esa faqat Supabase sozlanmagan demo rejimda ishlatiladi. Interfeys bir xil.
 
 ## Fayl tuzilishi (kitoblar moduli)
 
@@ -221,7 +233,8 @@ src/lib/books/
   segment.ts       # kitob → mavzular (mundarija / sarlavha / fallback)
   extract.ts       # misol, masala, qoida, ta'rif, lug'at, ro'yxat ajratish
   generate.ts      # fan bo'yicha o'yin generatorlari
-  store.ts         # ingest orkestratsiyasi, fayl saqlash, yuklash sessiyalari
+  store.ts         # ingest orkestratsiyasi, saqlash (Supabase yoki fayl), yuklash sessiyalari
+  db.ts            # Supabase qatlami: books / custom_games / game_results
   pdf-client.ts    # brauzerda PDF o'qish (pdf.js)
 
 src/app/books/
@@ -237,7 +250,7 @@ src/components/books/
   GamePlayer.tsx   # 13 xil o'yin interfeysi
 
 src/lib/config.ts              # doimiy qiymatlar (sinflar, alifbo, limitlar, taymerlar)
-src/lib/books/custom.ts        # o'qituvchi o'yinlarini saqlash (.data/custom-games.json)
+src/lib/books/custom.ts        # o'qituvchi o'yinlari: Supabase `custom_games` yoki `.data/custom-games.json`
 src/lib/books/custom-parse.ts  # matn → o'yin elementlari (+ normallashtirish)
 src/lib/books/quiz-pool.ts     # doska viktorinasi uchun savollar havzasi
 

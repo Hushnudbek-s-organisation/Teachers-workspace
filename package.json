@@ -13,7 +13,8 @@
     "lint": "next lint",
     "test:books": "tsx scripts/test-book-engine.mts",
     "test:games": "tsx scripts/test-game-builder.mts",
-    "ingest": "node scripts/ingest-pdf.mjs"
+    "ingest": "node scripts/ingest-pdf.mjs",
+    "test:supabase": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-supabase-path.mts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

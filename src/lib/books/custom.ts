@@ -1,9 +1,12 @@
 import "server-only";
 import { MAX_CUSTOM_GAMES, MAX_CUSTOM_ITEMS } from "@/lib/config";
+import { isSupabaseConfigured } from "@/lib/repo";
+import { dbDeleteCustomGame, dbGetCustomGame, dbListCustomGames, dbUpsertCustomGame } from "./db";
 
 // ============================================================================
 // O'qituvchi o'zi yasagan o'yinlar
-//   `.data/custom-games.json` da saqlanadi.
+//   Supabase sozlangan bo'lsa — `custom_games` jadvalida,
+//   aks holda `.data/custom-games.json` faylida saqlanadi.
 //   O'qituvchi o'z so'zlari/misollari bilan istalgan turdagi o'yinni yasay oladi.
 // ============================================================================
 
@@ -53,12 +56,14 @@ function withDerivedGroups(type: GameType, items: GameItem[], groups?: string[])
 }
 
 export async function listCustomGames(bookId?: string): Promise<CustomGame[]> {
+  if (isSupabaseConfigured()) return dbListCustomGames(bookId);
   const all = await readAll();
   const filtered = bookId ? all.filter((g) => g.bookId === bookId) : all;
   return filtered.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 }
 
 export async function getCustomGame(id: string): Promise<CustomGame | null> {
+  if (isSupabaseConfigured()) return dbGetCustomGame(id);
   const all = await readAll();
   return all.find((g) => g.id === id) ?? null;
 }
@@ -101,21 +106,18 @@ export async function createCustomGame(input: CustomGameInput): Promise<CustomGa
     topicId: input.topicId,
   };
 
+  if (isSupabaseConfigured()) {
+    await dbUpsertCustomGame(game);
+    return game;
+  }
   const all = await readAll();
   all.push(game);
   await writeAll(all.slice(-MAX_CUSTOM_GAMES));
   return game;
 }
 
-/** Mavjud o'yinni tahrirlash (tahrir sahifasi shu funksiyani ishlatadi) */
-export async function updateCustomGame(
-  id: string,
-  patch: Partial<CustomGameInput>
-): Promise<CustomGame | null> {
-  const all = await readAll();
-  const i = all.findIndex((g) => g.id === id);
-  if (i < 0) return null;
-  const prev = all[i];
+/** Tahrir natijasini hisoblash (saqlashdan alohida — Supabase'da ham ishlaydi) */
+function mergeCustom(prev: CustomGame, patch: Partial<CustomGameInput>): CustomGame {
   const type = patch.type ?? prev.type;
   const items = patch.items?.length
     ? normalizeItems(patch.items.filter(Boolean), type).slice(0, MAX_CUSTOM_ITEMS)
@@ -134,12 +136,36 @@ export async function updateCustomGame(
     topicId: patch.topicId ?? prev.topicId,
     builtFrom: patch.note ? { ...prev.builtFrom, note: patch.note } : prev.builtFrom,
   };
+  return next;
+}
+
+/**
+ * Mavjud o'yinni tahrirlash (tahrir sahifasi shu funksiyani ishlatadi).
+ * Supabase sozlangan bo'lsa ham avval mavjud o'yin o'sha yerdan o'qiladi —
+ * aks holda tahrir "topilmadi" bo'lib qolardi.
+ */
+export async function updateCustomGame(
+  id: string,
+  patch: Partial<CustomGameInput>
+): Promise<CustomGame | null> {
+  if (isSupabaseConfigured()) {
+    const prev = await dbGetCustomGame(id);
+    if (!prev) return null;
+    const next = mergeCustom(prev, patch);
+    await dbUpsertCustomGame(next);
+    return next;
+  }
+  const all = await readAll();
+  const i = all.findIndex((g) => g.id === id);
+  if (i < 0) return null;
+  const next = mergeCustom(all[i], patch);
   all[i] = next;
   await writeAll(all);
   return next;
 }
 
 export async function deleteCustomGame(id: string): Promise<boolean> {
+  if (isSupabaseConfigured()) return dbDeleteCustomGame(id);
   const all = await readAll();
   const next = all.filter((g) => g.id !== id);
   if (next.length === all.length) return false;
