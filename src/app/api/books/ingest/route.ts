@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ingestBook, listBookMetas, saveBook } from "@/lib/books/store";
 import type { BookPage } from "@/lib/books/segment";
 import type { SubjectKey } from "@/lib/books/types";
+import { normalizeGrade, TEXT_PAGE_CHARS } from "@/lib/config";
 
 // ============================================================================
 // POST /api/books/ingest
@@ -21,8 +22,6 @@ import type { SubjectKey } from "@/lib/books/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const PAGE_CHARS = 2500;
-
 export async function GET() {
   const books = await listBookMetas();
   return NextResponse.json({
@@ -31,7 +30,7 @@ export async function GET() {
       id: b.id,
       title: b.title,
       subject: b.subject,
-      mode: b.mode,
+      grade: b.grade,
       topics: b.stats.topics,
       games: b.stats.games,
       items: b.stats.items,
@@ -61,8 +60,8 @@ export async function POST(req: NextRequest) {
     } else if (typeof body.text === "string" && body.text.trim()) {
       const text = body.text;
       chars = text.length;
-      for (let i = 0, page = 1; i < text.length; i += PAGE_CHARS, page++) {
-        const chunk = text.slice(i, i + PAGE_CHARS);
+      for (let i = 0, page = 1; i < text.length; i += TEXT_PAGE_CHARS, page++) {
+        const chunk = text.slice(i, i + TEXT_PAGE_CHARS);
         if (chunk.trim()) pages.push({ page, text: chunk });
       }
     }
@@ -74,7 +73,7 @@ export async function POST(req: NextRequest) {
     const title = body.title?.trim() || body.fileName?.replace(/\.[^.]+$/, "") || "Nomsiz kitob";
     const { book, report } = ingestBook({
       title,
-      grade: Number(body.grade) || 3,
+      grade: normalizeGrade(body.grade),
       subject: body.subject,
       fileName: body.fileName || `${title}.txt`,
       sizeBytes: chars,

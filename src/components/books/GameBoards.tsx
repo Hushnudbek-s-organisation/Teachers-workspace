@@ -7,6 +7,7 @@
 // ============================================================================
 
 import { useEffect, useMemo, useState } from "react";
+import { POP_SECONDS_PER_ITEM, QUIZ_SECONDS_PER_QUESTION } from "@/lib/config";
 import { Check, Lightbulb, Printer, RotateCcw, Timer, Trophy, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
@@ -28,7 +29,7 @@ import { Progress, shuffleStable, useCountdown, type BoardProps } from "./board-
 export function PopBoard({
   items,
   onFinish,
-  secondsPerItem = 15,
+  secondsPerItem = POP_SECONDS_PER_ITEM,
 }: BoardProps & { items: MathItem[]; secondsPerItem?: number }) {
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);

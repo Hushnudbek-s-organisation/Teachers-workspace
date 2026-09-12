@@ -362,8 +362,6 @@ export interface Topic {
 
 // --------------------------------- Kitob -----------------------------------
 
-export type BookMode = "namuna" | "yuklangan";
-
 export interface BookSource {
   kind: "pdf" | "matn";
   fileName: string;
@@ -391,7 +389,6 @@ export interface Book {
   subjectLabel: string;
   language: "uz" | "ru" | "en" | "boshqa";
   author?: string;
-  mode: BookMode;
   source: BookSource;
   createdAt: string;
   topics: Topic[];
@@ -406,7 +403,6 @@ export interface BookMeta {
   subject: SubjectKey;
   subjectLabel: string;
   author?: string;
-  mode: BookMode;
   createdAt: string;
   source: BookSource;
   stats: BookStats;
@@ -432,7 +428,3 @@ export interface GameResult {
   createdAt: string;
 }
 
-export interface TopicWithBook {
-  book: BookMeta;
-  topic: Topic;
-}

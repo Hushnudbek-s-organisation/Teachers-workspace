@@ -12,6 +12,14 @@
 
 import type { Game, GameItem, SubjectKey, Topic, TopicExample } from "./types";
 import { SUBJECTS } from "./types";
+import {
+  DEFAULT_MAX_ITEMS,
+  MAX_GAMES_PER_TOPIC,
+  MAX_ITEMS_PER_GAME,
+  MAX_WORD_PROBLEM_CHARS,
+  UZ_ALPHABET,
+  UZ_VOWELS,
+} from "../config";
 import type { RawTopic } from "./segment";
 import {
   extractBlanks,
@@ -62,26 +70,12 @@ interface Ctx {
   otherDefs: Pair[];
   /** Mavzuning kalit so'zlari */
   keywords: string[];
+  /** Kitobning boshqa mavzularidagi so'zlar (chalg'ituvchi variantlar uchun) */
+  poolWords: string[];
 }
 
-const MAX_ITEMS: Record<Game["type"], number> = {
-  quiz: 8,
-  matching: 6,
-  fill: 8,
-  truefalse: 8,
-  order: 5,
-  math: 12,
-  memory: 6,
-  pop: 10,
-  puzzle: 6,
-  missingletter: 8,
-  findmistake: 6,
-  grouping: 12,
-  bingo: 16,
-};
-
-/** Bir mavzudan ko'pi bilan shuncha o'yin chiqadi */
-const MAX_GAMES_PER_TOPIC = 7;
+/** O'yin turi bo'yicha elementlar soni (config'dan olinadi) */
+const MAX_ITEMS = MAX_ITEMS_PER_GAME as Record<Game["type"], number>;
 
 // ---------------------------------------------------------------------------
 // Asosiy kirish nuqtasi
@@ -91,7 +85,7 @@ export function analyzeTopic(
   raw: RawTopic,
   subject: SubjectKey,
   seedBase: string,
-  extras?: { otherDefs?: Pair[]; authorPairs?: BookLevelPair[] }
+  extras?: { otherDefs?: Pair[]; authorPairs?: BookLevelPair[]; poolWords?: string[] }
 ): Topic {
   const pages = splitIntoPages(raw);
   const seed = `${seedBase}:${raw.title}:${raw.pageStart}`;
@@ -111,6 +105,7 @@ export function analyzeTopic(
     authorPairs: extras?.authorPairs ?? [],
     otherDefs: extras?.otherDefs ?? [],
     keywords: keyphrases(raw.text, 26),
+    poolWords: extras?.poolWords ?? [],
   };
 
   const strategy = SUBJECTS[subject]?.strategy ?? "generic";
@@ -189,6 +184,7 @@ function makeGame(
   const min = type === "memory" ? 4 : 3;
   const clean = items.filter(Boolean);
   if (clean.length < min) return null;
+  const limit = MAX_ITEMS[type] ?? DEFAULT_MAX_ITEMS;
   const pages = uniq(ctx.pages.map((p) => p.page)).slice(0, 6);
   return {
     id: `${ctx.seed.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${type}`,
@@ -196,7 +192,7 @@ function makeGame(
     title,
     instructions,
     difficulty,
-    items: clean.slice(0, MAX_ITEMS[type]),
+    items: clean.slice(0, limit),
     builtFrom: { note: note || `${clean.length} ta material asosida`, pages },
   };
 }
@@ -380,7 +376,7 @@ function solveWordProblems(ctx: Ctx): Array<{ question: string; options: string[
     .concat(unitsOf(ctx.raw.text).filter((s) => s.endsWith("?") && /\d/.test(s)));
 
   for (const p of problems) {
-    if (p.length > 300 || p.length < 12) continue;
+    if (p.length > MAX_WORD_PROBLEM_CHARS || p.length < 12) continue;
     if (!p.includes("?")) continue;
 
     const clean = p.replace(/^\s*\d{1,3}[.)]\s*/, "").replace(/\s+/g, " ").trim();
@@ -1173,9 +1169,15 @@ function buildDefinitionQuiz(ctx: Ctx): GameItem[] {
 function buildWordPresenceQuiz(ctx: Ctx): GameItem[] {
   const inText = keyphrases(ctx.raw.text, 20).filter((w) => w.length >= 5);
   if (inText.length < 2) return [];
-  const notInText = COMMON_UZ_WORDS.filter(
-    (w) => !foldWord(ctx.raw.text).includes(w) && w.length >= 5 && !inText.includes(w)
-  );
+
+  // Chalg'ituvchi so'zlar — kitobning BOSHQA mavzularidan olinadi
+  // (qotib qolgan so'z ro'yxati o'rniga kitobning o'z lug'ati ishlatiladi)
+  const topicFold = foldWord(ctx.raw.text);
+  const notInText = uniq([
+    ...ctx.poolWords,
+    ...ctx.otherDefs.map((d) => foldWord(d.left)),
+  ]).filter((w) => w.length >= 5 && !topicFold.includes(w) && !inText.map(foldWord).includes(w));
+
   if (notInText.length < 3) return [];
 
   const out: GameItem[] = [];
@@ -1224,12 +1226,6 @@ function buildSpellingQuiz(ctx: Ctx): GameItem[] {
   return out;
 }
 
-const COMMON_UZ_WORDS = [
-  "kitob", "maktab", "o'qituvchi", "daraxt", "gulzor", "bulut", "quyosh", "yulduz",
-  "daryo", "tog'lar", "shahar", "qishloq", "bahor", "kuzgi", "qorong'i", "yomg'ir",
-  "sayohat", "do'stlik", "mehnat", "orzular", "xursand", "futbol", "shifokor", "kema",
-  "traktor", "sabzavot", "mevalar", "hayvon", "qushlar", "baliq", "kamalak", "shamollar",
-];
 
 // ---------------------------------------------------------------------------
 // YANGI O'YIN TURLARI
@@ -1321,12 +1317,14 @@ function buildMissingLetterItems(ctx: Ctx, limit: number): GameItem[] {
     ...(ctx.glossary.length ? ctx.glossary.map((g) => g.left.toLowerCase()) : []),
   ]).filter((w) => /^[a-zа-яё'ʻʼ]{4,12}$/i.test(w) && !w.includes("'"));
 
-  const alphabet = "abcdefgijklmnopqrstuvxyz".split("");
+  const alphabet = UZ_ALPHABET;
   const out: GameItem[] = [];
 
   for (const w of shuffleSeeded(words, ctx.seed + "ml")) {
     // ko'pincha unli harfni yashiramiz (imlo uchun muhim)
-    const vowelIdx = [...w].map((c, i) => ("aeiou".includes(c.toLowerCase()) ? i : -1)).filter((i) => i > 0);
+    const vowelIdx = [...w]
+      .map((c, i) => (UZ_VOWELS.includes(c.toLowerCase()) ? i : -1))
+      .filter((i) => i > 0);
     const idx = vowelIdx.length ? vowelIdx[Math.floor(vowelIdx.length / 2)] : Math.floor(w.length / 2);
     const letter = w[idx];
     if (!letter) continue;

@@ -34,8 +34,13 @@ import {
   type SubjectKey,
 } from "@/lib/books/types";
 import { Badge, Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
-import { actionSaveCustomGame, type SaveCustomInput } from "@/app/games/actions";
+import {
+  actionSaveCustomGame,
+  actionUpdateCustomGame,
+  type SaveCustomInput,
+} from "@/app/games/actions";
 import { normalizeItems, parseCustomItems } from "@/lib/books/custom-parse";
+import { DEFAULT_GRADE, DEFAULT_SUBJECT, GRADES, normalizeGrade } from "@/lib/config";
 
 interface Props {
   books: { id: string; title: string; topics: { id: string; title: string }[] }[];
@@ -68,8 +73,11 @@ export function GameBuilder({ books, initial }: Props) {
 
   const [title, setTitle] = useState(initial?.title ?? "");
   const [type, setType] = useState<GameType>(initial?.type ?? "matching");
-  const [subject, setSubject] = useState<SubjectKey>(initial?.subject ?? "ona-tili");
-  const [grade, setGrade] = useState(initial?.grade ?? 3);
+  const [subject, setSubject] = useState<SubjectKey>(initial?.subject ?? DEFAULT_SUBJECT);
+  const [grade, setGrade] = useState(initial?.grade ?? DEFAULT_GRADE);
+  const [difficulty, setDifficulty] = useState<1 | 2 | 3>(
+    (initial as { difficulty?: 1 | 2 | 3 } | undefined)?.difficulty ?? 2
+  );
   const [instructions, setInstructions] = useState(initial?.instructions ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
   const [groupsRaw, setGroupsRaw] = useState((initial?.groups ?? []).join("\n"));
@@ -126,6 +134,7 @@ export function GameBuilder({ books, initial }: Props) {
         subject,
         grade,
         instructions,
+        difficulty,
         groups: groupsRaw
           .split(/[\n,]+/)
           .map((g) => g.trim())
@@ -136,7 +145,10 @@ export function GameBuilder({ books, initial }: Props) {
         bookId: bookId || undefined,
         topicId: topicId || undefined,
       };
-      const res = await actionSaveCustomGame(payload);
+      const res =
+        editing && initial
+          ? await actionUpdateCustomGame(initial.id, payload)
+          : await actionSaveCustomGame(payload);
       setSaved(res.id);
       router.push(`/games/${res.id}`);
     } catch (e) {
@@ -224,8 +236,8 @@ export function GameBuilder({ books, initial }: Props) {
             </Select>
           </Field>
           <Field label="Sinf">
-            <Select value={grade} onChange={(e) => setGrade(Number(e.target.value))}>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((g) => (
+            <Select value={grade} onChange={(e) => setGrade(normalizeGrade(e.target.value))}>
+              {GRADES.map((g) => (
                 <option key={g} value={g}>
                   {g}-sinf
                 </option>
@@ -234,11 +246,12 @@ export function GameBuilder({ books, initial }: Props) {
           </Field>
           <Field label="Qiyinlik">
             <Select
-              value={(initial as { difficulty?: number } | undefined)?.difficulty ?? 2}
-              onChange={() => undefined}
-              disabled
+              value={difficulty}
+              onChange={(e) => setDifficulty(Number(e.target.value) as 1 | 2 | 3)}
             >
-              <option value={2}>⭐️⭐️ O'rta</option>
+              <option value={1}>⭐ Oson</option>
+              <option value={2}>⭐⭐ O'rta</option>
+              <option value={3}>⭐⭐⭐ Qiyin</option>
             </Select>
           </Field>
           <div className="sm:col-span-2">

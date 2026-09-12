@@ -1,4 +1,5 @@
 import "server-only";
+import { MAX_CUSTOM_GAMES, MAX_CUSTOM_ITEMS } from "@/lib/config";
 
 // ============================================================================
 // O'qituvchi o'zi yasagan o'yinlar
@@ -67,7 +68,7 @@ export interface CustomGameInput {
 }
 
 export async function createCustomGame(input: CustomGameInput): Promise<CustomGame> {
-  const items = normalizeItems(input.items.filter(Boolean), input.type).slice(0, 40);
+  const items = normalizeItems(input.items.filter(Boolean), input.type).slice(0, MAX_CUSTOM_ITEMS);
   if (!items.length) throw new Error("O'yin uchun kamida bitta savol/ juftlik kerak.");
 
   const game: CustomGame = {
@@ -89,11 +90,15 @@ export async function createCustomGame(input: CustomGameInput): Promise<CustomGa
 
   const all = await readAll();
   all.push(game);
-  await writeAll(all.slice(-500));
+  await writeAll(all.slice(-MAX_CUSTOM_GAMES));
   return game;
 }
 
-export async function updateCustomGame(id: string, patch: Partial<CustomGameInput>): Promise<CustomGame | null> {
+/** Mavjud o'yinni tahrirlash (tahrir sahifasi shu funksiyani ishlatadi) */
+export async function updateCustomGame(
+  id: string,
+  patch: Partial<CustomGameInput>
+): Promise<CustomGame | null> {
   const all = await readAll();
   const i = all.findIndex((g) => g.id === id);
   if (i < 0) return null;
@@ -106,12 +111,13 @@ export async function updateCustomGame(id: string, patch: Partial<CustomGameInpu
     groups: patch.groups?.length ? patch.groups : prev.groups,
     subject: patch.subject ?? prev.subject,
     grade: patch.grade ?? prev.grade,
-    items: patch.items?.length ? patch.items.slice(0, 40) : prev.items,
+    items:
+      patch.items?.length
+        ? normalizeItems(patch.items.filter(Boolean), patch.type ?? prev.type).slice(0, MAX_CUSTOM_ITEMS)
+        : prev.items,
     bookId: patch.bookId ?? prev.bookId,
     topicId: patch.topicId ?? prev.topicId,
-    builtFrom: patch.note
-      ? { ...prev.builtFrom, note: patch.note }
-      : prev.builtFrom,
+    builtFrom: patch.note ? { ...prev.builtFrom, note: patch.note } : prev.builtFrom,
   };
   all[i] = next;
   await writeAll(all);
@@ -126,16 +132,5 @@ export async function deleteCustomGame(id: string): Promise<boolean> {
   return true;
 }
 
-/** O'yinni boshqa kitob/mavzuga bog'lash (yoki uzish) */
-export async function attachCustomGame(id: string, bookId?: string, topicId?: string): Promise<boolean> {
-  const all = await readAll();
-  const g = all.find((x) => x.id === id);
-  if (!g) return false;
-  g.bookId = bookId;
-  g.topicId = topicId;
-  await writeAll(all);
-  return true;
-}
-
 // Parse funksiyalarini qayta eksport qilamiz (server tomonda ishlatish uchun)
-export { parseCustomItems, normalizeItems, formatHint } from "./custom-parse";
+export { parseCustomItems, normalizeItems } from "./custom-parse";

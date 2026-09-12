@@ -65,10 +65,6 @@ export function foldWord(s: string): string {
     .trim();
 }
 
-export function sameWord(a: string, b: string): boolean {
-  return foldWord(a) === foldWord(b);
-}
-
 // ---------------------------------- Gaplar ----------------------------------
 
 const SENTENCE_END = /([.!?…]+)(\s|$)/g;
@@ -202,36 +198,17 @@ export function shuffleSeeded<T>(arr: readonly T[], seed: string | number): T[] 
   return out;
 }
 
-/** Takrorlanmas tasodifiy tanlov */
-export function pickSeeded<T>(arr: readonly T[], count: number, seed: string | number): T[] {
-  return shuffleSeeded(arr, seed).slice(0, count);
-}
-
 // ------------------------------- Kichik util --------------------------------
 
 export function uniq<T>(arr: readonly T[]): T[] {
   return [...new Set(arr)];
 }
 
-export function titleCaseUz(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
 export function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
 
-export function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /** "1 000", "1,5" → son */
-export function parseNumber(s: string): number | null {
-  const cleaned = s.replace(/\s/g, "").replace(",", ".");
-  if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
-  return Number(cleaned);
-}
-
 /** Sonni chiroyli ko'rsatish */
 export function formatNumber(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100).replace(".", ",");

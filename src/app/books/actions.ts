@@ -8,6 +8,7 @@
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
+import { normalizeGrade, TEXT_PAGE_CHARS } from "@/lib/config";
 import type { BookPage } from "@/lib/books/segment";
 import type { GameResult, SubjectKey } from "@/lib/books/types";
 import {
@@ -16,7 +17,6 @@ import {
   finishUpload,
   getBook,
   ingestBook,
-  regenerateBook,
   saveBook,
   saveResult,
   startUpload,
@@ -75,12 +75,11 @@ export async function actionCreateFromText(input: {
   fileName?: string;
 }): Promise<{ bookId: string; topics: number; games: number }> {
   const text = input.text.replace(/\r\n?/g, "\n");
-  // Matnni ~2500 belgidan iborat "sahifa"larga bo'lamiz
-  const CHUNK = 2500;
+  // Matnni bir xil hajmdagi "sahifa"larga bo'lamiz
   const pages: BookPage[] = [];
   let page = 1;
-  for (let i = 0; i < text.length; i += CHUNK) {
-    const chunk = text.slice(i, i + CHUNK);
+  for (let i = 0; i < text.length; i += TEXT_PAGE_CHARS) {
+    const chunk = text.slice(i, i + TEXT_PAGE_CHARS);
     if (chunk.trim().length === 0) continue;
     pages.push({ page, text: chunk });
     page++;
@@ -89,7 +88,7 @@ export async function actionCreateFromText(input: {
 
   const { book, report } = ingestBook({
     title: input.title,
-    grade: input.grade,
+    grade: normalizeGrade(input.grade),
     subject: input.subject,
     fileName: input.fileName || `${input.title}.txt`,
     sizeBytes: text.length,
@@ -105,15 +104,6 @@ export async function actionDeleteBook(bookId: string): Promise<{ ok: boolean }>
   const ok = await deleteBook(bookId);
   revalidatePath("/books");
   return { ok };
-}
-
-export async function actionRegenerate(bookId: string): Promise<{ games: number }> {
-  const book = await getBook(bookId);
-  if (!book) throw new Error("Kitob topilmadi.");
-  if (book.mode === "namuna") return { games: book.stats.games };
-  const fresh = await regenerateBook(book);
-  revalidatePath(`/books/${bookId}`);
-  return { games: fresh.stats.games };
 }
 
 export async function actionSaveResult(

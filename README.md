@@ -9,7 +9,7 @@ Teacher & Admin Dashboard for a school management platform:
 | **`supabase/seed.sql`** | Namoyish ma'lumotlari (shu jumladan bugun tug'ilgan kuni bo'lgan o'quvchi) |
 | **`src/app/*` + `src/components/*`** | **Task 2** — Students / Parents / Teachers / Schedule CRUD, kunlik davomat, uyga ketish, baholash, birthday alert |
 | **`src/app/page.tsx` + `src/app/analytics`** | **Task 3** — Recharts dashboard: KPI kartalar, haftalik davomat grafigi, fanlar kesimida baholar, dismissal pie, hisobotlar |
-| **`src/lib/books/*` + `src/app/books/*`** | **Kitob → O'yin** — darslikni PDF'dan o'qib mavzularga bo'ladi va har bir mavzudan o'yinlar yasaydi (5 fan uchun namuna kitoblar bilan) |
+| **`src/lib/books/*` + `src/app/books/*`** | **Kitob → O'yin** — o'qituvchi yuklagan darslikni (PDF/matn) o'qib mavzularga bo'ladi va har bir mavzudan o'yinlar yasaydi (sinf va fan o'qituvchi tanlaydi) |
 | **`src/lib/books/custom*` + `src/app/games/*`** | **O'qituvchi o'yin yasash** — 13 xil o'yin turi, o'z so'zlari/misollari bilan (matn yoki jadval orqali) |
 | **`src/app/classroom`** | **Sinf bilan o'ynash** — 🎡 charxpalak, 🏆 guruhlar viktorinasi (Kahoot uslubida), 🎟 bingo kartalari (chop etish) |
 
@@ -153,8 +153,9 @@ o'quvchilar natijalari esa kitob sahifasidagi **leaderboard**da yig'iladi.
 ### 1. Ilova orqali (o'qituvchi uchun)
 
 1. Chap menyudan **«Kitoblar & O'yinlar»** ni oching.
-2. PDF'ni burab tashlang (bir nechta faylni birdan yuklash mumkin).
-   Fan nomi fayl nomidan avtomatik aniqlanadi.
+2. **Sinf** va **fanni** tanlang (fan fayl nomidan taxmin qilinadi, lekin siz
+   o'zgartira olasiz), so'ng PDF'ni burab tashlang yoki matnni joylang.
+   Bir nechta faylni birdan yuklash mumkin.
 3. Tahlil tugagach kitob kartasi paydo bo'ladi → **«O'yinlarni ko'rish»**.
 4. Mavzuni ochib, o'yinni tanlang va sinfda o'ynang. Natijani o'quvchi ismiga
    saqlash mumkin.
@@ -182,24 +183,28 @@ curl -X POST http://localhost:3000/api/books/ingest \
   -d '{"title":"Matematika 3-sinf","grade":3,"subject":"matematika","text":"1-MAVZU. ..."}'
 ```
 
-### 4. Namuna kitoblar
+### 4. Ma'lumotlar faqat yuklangan kitoblardan olinadi
 
-Tizimda 3-sinfning **5 fani** bo'yicha rasmiy mundarija asosida tayyorlangan namuna
-kitoblar bor (`src/lib/books/samples.ts`): Matematika, Ona tili, O'qish savodxonligi,
-Tabiatshunoslik, Ingliz tili — jami **100+ o'yin, 600+ savol**. Ular yuklashsiz
-darhol sinab ko'rish uchun kerak.
+Ilovada kodi ichiga "qotirib" qo'yilgan namuna kitob, tayyor savol yoki darslik
+matni **yo'q** — barcha mavzular, so'zlar va o'yinlar siz yuklagan kitobdan
+yasaydi. Kitob yuklanmagan bo'lsa, «Kitoblar» sahifasi shunchaki bo'sh holatni
+ko'rsatadi. Doimiy sozlamalar (sinf oralig'i, chegaralar, alifbo) — bitta joyda:
+`src/lib/config.ts`.
 
 ## Dvigatelni sinash
 
 ```bash
-npm run test:books     # namuna kitoblar + 200 betli sun'iy kitob segmentatsiyasi
+npm run test:books                          # yuklangan hamma kitob ustida hisobot
+npx tsx scripts/test-book-engine.mts .data/books/<id>.json
 ```
+
+Skript `.data/books/*.json` dagi kitoblarni o'qib, mavzu → o'yin → element
+hisobini chiqaradi. Kitob hali yuklanmagan bo'lsa, shuni aytadi.
 
 ## Ma'lumotlar qayerda saqlanadi
 
 | Nima | Joy |
 | --- | --- |
-| Namuna kitoblar | kod ichida (`samples.ts`) |
 | Yuklangan kitoblar | `.data/books/*.json` (git'ga tushmaydi) |
 | O'yin natijalari | `.data/game-results.json` |
 
@@ -211,12 +216,11 @@ npm run test:books     # namuna kitoblar + 200 betli sun'iy kitob segmentatsiyas
 
 ```
 src/lib/books/
-  types.ts         # tiplar: Book, Topic, Game, 7 o'yin turi, fanlar
+  types.ts         # tiplar: Book, Topic, Game, 13 o'yin turi, fanlar
   text.ts          # matnni tozalash, gaplarga bo'lish, kalit so'zlar, seed'li RNG
   segment.ts       # kitob → mavzular (mundarija / sarlavha / fallback)
   extract.ts       # misol, masala, qoida, ta'rif, lug'at, ro'yxat ajratish
   generate.ts      # fan bo'yicha o'yin generatorlari
-  samples.ts       # 5 ta namuna kitob (3-sinf)
   store.ts         # ingest orkestratsiyasi, fayl saqlash, yuklash sessiyalari
   pdf-client.ts    # brauzerda PDF o'qish (pdf.js)
 
@@ -230,8 +234,9 @@ src/app/api/books/ingest/route.ts   # HTTP API
 src/components/books/
   BooksClient.tsx  # yuklash paneli, kitob kartalari
   BookDetail.tsx   # mavzu akkordeoni, o'yin kartalari, leaderboard
-  GamePlayer.tsx   # 7 xil o'yin interfeysi
+  GamePlayer.tsx   # 13 xil o'yin interfeysi
 
+src/lib/config.ts              # doimiy qiymatlar (sinflar, alifbo, limitlar, taymerlar)
 src/lib/books/custom.ts        # o'qituvchi o'yinlarini saqlash (.data/custom-games.json)
 src/lib/books/custom-parse.ts  # matn → o'yin elementlari (+ normallashtirish)
 src/lib/books/quiz-pool.ts     # doska viktorinasi uchun savollar havzasi

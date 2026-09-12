@@ -3,10 +3,9 @@ import { BookDetail, type BookPayload } from "@/components/books/BookDetail";
 import { getBook, leaderboard } from "@/lib/books/store";
 import { listCustomGames } from "@/lib/books/custom";
 import { GAME_TYPES } from "@/lib/books/types";
+import { BOOK_TEXT_PREVIEW_CHARS } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
-
-const PREVIEW_CHARS = 1200;
 
 export default async function BookPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,7 +21,6 @@ export default async function BookPage({ params }: { params: Promise<{ id: strin
     grade: book.grade,
     subjectLabel: book.subjectLabel,
     author: book.author,
-    mode: book.mode,
     stats: book.stats,
     source: book.source,
     topics: book.topics.map((t) => ({
@@ -35,7 +33,7 @@ export default async function BookPage({ params }: { params: Promise<{ id: strin
       keywords: t.keywords,
       examples: t.examples.slice(0, 20),
       games: t.games,
-      textPreview: t.text.slice(0, PREVIEW_CHARS),
+      textPreview: t.text.slice(0, BOOK_TEXT_PREVIEW_CHARS),
     })),
   };
 

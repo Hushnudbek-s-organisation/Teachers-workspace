@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { useState } from "react";
+import { BOOK_TEXT_PREVIEW_CHARS } from "@/lib/config";
 import Link from "next/link";
 import {
   ChevronDown,
@@ -36,7 +37,6 @@ export interface BookPayload {
   grade: number;
   subjectLabel: string;
   author?: string;
-  mode: string;
   stats: Book["stats"];
   source: Book["source"];
   topics: TopicCard[];
@@ -89,7 +89,8 @@ export function BookDetail({
             <Pill icon={<Sparkles className="h-3 w-3" />} text={`${book.stats.items} savol`} />
             <Pill icon={<FileText className="h-3 w-3" />} text={`${book.stats.pages} bet · ${Math.round(book.stats.chars / 1000)} ming belgi`} />
             <Pill
-              text={book.mode === "namuna" ? "Namuna kitob" : "Yuklangan kitob"}
+              icon={book.source.kind === "pdf" ? <FileText className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
+              text={book.source.kind === "pdf" ? "PDF'dan olingan" : "Matndan yaratilgan"}
             />
           </div>
         </div>
@@ -302,7 +303,7 @@ function TopicBlock({
                   <p className="mb-1.5 text-xs font-semibold text-slate-600">Mavzu matni (qisqartirilgan)</p>
                   <p className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-white p-3 text-xs leading-relaxed text-slate-600">
                     {topic.textPreview}
-                    {topic.textPreview.length >= 1200 ? "…" : ""}
+                    {topic.textPreview.length >= BOOK_TEXT_PREVIEW_CHARS ? "…" : ""}
                   </p>
                 </div>
               </div>

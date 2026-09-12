@@ -203,33 +203,6 @@ export function parseCustomItems(raw: string, type: GameType): ParsePreview {
 }
 
 
-/** O'yin turi bo'yicha matn ko'rinishining namunasini beradi */
-export function formatHint(type: GameType): string {
-  switch (type) {
-    case "matching":
-    case "memory":
-      return "kitob — book\nmaktab — school\nquyosh — sun";
-    case "grouping":
-      return "Guruh nomini yuqoridagi maydonda yozing.\nolma — Mevali daraxtlar\nuzum — Mevali daraxtlar\nkartoshka — Sabzavotlar";
-    case "truefalse":
-      return "Quyosh — issiqlik manbai | to'g'ri\nSuv 100 gradusda muzlaydi | noto'g'ri";
-    case "fill":
-      return "Kitob — bilim manbai | manbai\nBahor keldi, qorlar ___ | eridi";
-    case "missingletter":
-      return "k_tob | kitob\nm_ktab | maktab";
-    case "puzzle":
-      return "kitob | ki,tob\nmaktab | mak,tab";
-    case "order":
-      return "Gapni tartibla | Bugun | havo | issiq";
-    case "math":
-    case "pop":
-      return "24 + 38 = 62\n350 - 125 = 225";
-    case "bingo":
-      return "olma\nuzum\nanor\nnok\nbehi\nshaftoli\nanjir\nxurmo\nolcha";
-    default:
-      return "Poytaxti qaysi shahar? | Toshkent | Samarqand | Buxoro | Namangan\nEng katta okean? | Tinch okeani | Atlantika | Hind okeani | Shimoliy muz okeani";
-  }
-}
 
 // ---------------------------------------------------------------------------
 // NORMALLASHTIRISH — elementlarni o'yin interfeysi kutgan ko'rinishga keltiradi
@@ -408,5 +381,3 @@ export function normalizeItems(items: GameItem[], type: GameType, seed = 7): Gam
   });
 }
 
-/** Eski nom bilan moslik uchun */
-export const fillOptions = normalizeItems;

@@ -3,8 +3,7 @@ import "server-only";
 // ============================================================================
 // Kitoblarni saqlash qatlami
 //
-//   • Namuna kitoblar — kod ichida (har doim mavjud)
-//   • Yuklangan kitoblar — `.data/books/*.json` fayllarida
+//   • O'qituvchi yuklagan kitoblar — `.data/books/*.json` fayllarida
 //   • O'yin natijalari  — `.data/game-results.json`
 //
 // Diqqat: fayl tizimi serverda saqlanadi (Vercel kabi "read-only" muhitlarda
@@ -25,8 +24,8 @@ import { SUBJECTS, guessSubject } from "./types";
 import { analyzeTopic, extractAuthorPairs, type BookLevelPair } from "./generate";
 import { extractDefinitions } from "./extract";
 import { segmentBook, type BookPage, type SegmentReport } from "./segment";
-import { cleanExtractedText } from "./text";
-import { SAMPLE_BOOKS } from "./samples";
+import { cleanExtractedText, keyphrases } from "./text";
+import { BOOK_KEYWORD_POOL, MAX_SAVED_RESULTS, UPLOAD_SESSION_TTL_MS } from "../config";
 
 const DATA_DIR = path.join(process.cwd(), ".data");
 const BOOKS_DIR = path.join(DATA_DIR, "books");
@@ -60,7 +59,6 @@ function toMeta(book: Book): BookMeta {
     subject: book.subject,
     subjectLabel: book.subjectLabel,
     author: book.author,
-    mode: book.mode,
     createdAt: book.createdAt,
     source: book.source,
     stats: book.stats,
@@ -79,10 +77,6 @@ export function slugify(s: string): string {
 
 // ------------------------------ Kitoblar ro'yxati ---------------------------
 
-export function listSampleBooks(): Book[] {
-  return SAMPLE_BOOKS();
-}
-
 export async function listUploadedBooks(): Promise<Book[]> {
   try {
     await ensureDir(BOOKS_DIR);
@@ -100,19 +94,11 @@ export async function listUploadedBooks(): Promise<Book[]> {
 
 export async function listBookMetas(): Promise<BookMeta[]> {
   const uploaded = await listUploadedBooks();
-  const samples = listSampleBooks();
-  return [...uploaded.map(toMeta), ...samples.map(toMeta)];
+  return uploaded.map(toMeta);
 }
 
 export async function getBook(id: string): Promise<Book | null> {
-  const sample = listSampleBooks().find((b) => b.id === id);
-  if (sample) return sample;
   return readJson<Book>(path.join(BOOKS_DIR, `${slugify(id)}.json`));
-}
-
-export async function getBookMeta(id: string): Promise<BookMeta | null> {
-  const b = await getBook(id);
-  return b ? toMeta(b) : null;
 }
 
 export async function deleteBook(id: string): Promise<boolean> {
@@ -169,6 +155,9 @@ export function ingestBook(input: IngestInput): IngestResult {
   const authorPairs: BookLevelPair[] = extractAuthorPairs(fullText, 24);
   const allDefs = extractDefinitions(fullText, 40);
 
+  // Kitobning umumiy so'z boyligi — mavzular orasida "chalg'ituvchi" variantlar uchun
+  const bookKeywords = keyphrases(fullText, BOOK_KEYWORD_POOL);
+
   const isReading = subject === "oqish";
   const isForeign = subject === "ingliz-tili" || subject === "rus-tili";
 
@@ -176,6 +165,7 @@ export function ingestBook(input: IngestInput): IngestResult {
     const topic = analyzeTopic(raw, subject, slugify(rawTitle) || "kitob", {
       otherDefs: allDefs,
       authorPairs,
+      poolWords: bookKeywords,
     });
     topic.index = i + 1;
 
@@ -223,7 +213,6 @@ export function ingestBook(input: IngestInput): IngestResult {
     subjectLabel: SUBJECTS[subject].label,
     language: subject === "ingliz-tili" ? "en" : subject === "rus-tili" ? "ru" : "uz",
     author: input.author,
-    mode: "yuklangan",
     source,
     createdAt: new Date().toISOString(),
     topics,
@@ -235,28 +224,6 @@ export function ingestBook(input: IngestInput): IngestResult {
 
 export async function saveBook(book: Book): Promise<void> {
   await writeJson(path.join(BOOKS_DIR, `${slugify(book.id)}.json`), book);
-}
-
-/** Yuklangan kitobning o'yinlarini qayta yasash (masalan, fanni o'zgartirgandan keyin) */
-export async function regenerateBook(book: Book): Promise<Book> {
-  const pages: BookPage[] = [];
-  for (const t of book.topics) {
-    const parts = t.text.split(/\n{2,}/);
-    parts.forEach((text) => pages.push({ page: t.pageStart, text }));
-  }
-  const { book: fresh } = ingestBook({
-    title: book.title,
-    grade: book.grade,
-    subject: book.subject,
-    author: book.author,
-    fileName: book.source.fileName,
-    sizeBytes: book.source.sizeBytes,
-    kind: book.source.kind,
-    pages,
-  });
-  const merged: Book = { ...fresh, id: book.id, createdAt: book.createdAt };
-  await saveBook(merged);
-  return merged;
 }
 
 // ---------------------------------------------------------------------------
@@ -276,12 +243,11 @@ interface UploadSession {
 }
 
 const sessions = new Map<string, UploadSession>();
-const SESSION_TTL_MS = 1000 * 60 * 60; // 1 soat
 
 function gcSessions() {
   const now = Date.now();
   for (const [id, s] of sessions) {
-    if (now - s.createdAt > SESSION_TTL_MS) sessions.delete(id);
+    if (now - s.createdAt > UPLOAD_SESSION_TTL_MS) sessions.delete(id);
   }
 }
 
@@ -302,10 +268,6 @@ export function appendPages(id: string, pages: BookPage[]): number {
   }
   s.pages = [...byPage.values()].sort((a, b) => a.page - b.page);
   return s.pages.length;
-}
-
-export function getSession(id: string): UploadSession | undefined {
-  return sessions.get(id);
 }
 
 export function finishUpload(id: string): { book: Book; report: SegmentReport } {
@@ -343,7 +305,7 @@ export async function saveResult(result: Omit<GameResult, "id" | "createdAt">): 
   };
   all.push(full);
   // Fayl cheksiz o'smasligi uchun oxirgi 2000 natijani saqlaymiz
-  await writeJson(RESULTS_FILE, all.slice(-2000));
+  await writeJson(RESULTS_FILE, all.slice(-MAX_SAVED_RESULTS));
   return full;
 }
 

@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { useEffect, useMemo, useState } from "react";
+import { QUIZ_SECONDS_PER_QUESTION } from "@/lib/config";
 import {
   Check,
   Minus,
@@ -52,7 +53,7 @@ export function TeamQuiz({
   const [order, setOrder] = useState<number[]>([]);
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
-  const [seconds, setSeconds] = useState(30);
+  const [seconds, setSeconds] = useState(QUIZ_SECONDS_PER_QUESTION);
   const [running, setRunning] = useState(false);
   const [picked, setPicked] = useState<number | null>(null);
 
@@ -82,7 +83,7 @@ export function TeamQuiz({
     setIndex((v) => v + 1);
     setRevealed(false);
     setPicked(null);
-    setSeconds(30);
+    setSeconds(QUIZ_SECONDS_PER_QUESTION);
     setRunning(false);
   };
 
@@ -101,7 +102,7 @@ export function TeamQuiz({
     setIndex(0);
     setRevealed(false);
     setPicked(null);
-    setSeconds(30);
+    setSeconds(QUIZ_SECONDS_PER_QUESTION);
     setRunning(false);
     setTeams((prev) => prev.map((t) => ({ ...t, score: 0 })));
   };

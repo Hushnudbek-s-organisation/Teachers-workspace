@@ -8,6 +8,7 @@
 // ============================================================================
 
 import type { BookPage } from "./segment";
+import { SCANNED_PDF_CHARS_PER_PAGE } from "@/lib/config";
 
 export interface ExtractProgress {
   page: number;
@@ -86,7 +87,7 @@ export async function extractPdfPages(
     pages,
     totalPages: doc.numPages,
     chars: totalChars,
-    scanWarn: totalChars < doc.numPages * 120,
+    scanWarn: totalChars < doc.numPages * SCANNED_PDF_CHARS_PER_PAGE,
     title: metaTitle,
   };
 }

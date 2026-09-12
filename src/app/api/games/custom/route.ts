@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { GameType, SubjectKey } from "@/lib/books/types";
 import { createCustomGame, listCustomGames, normalizeItems, parseCustomItems } from "@/lib/books/custom";
+import { DEFAULT_SUBJECT, MAX_BULK_CUSTOM_GAMES, normalizeGrade } from "@/lib/config";
 
 // ============================================================================
 // POST /api/games/custom
@@ -43,8 +44,8 @@ async function createFromInput(input: GameInput) {
   const game = await createCustomGame({
     title: input.title ?? "Nomsiz o'yin",
     type,
-    subject: (input.subject ?? "boshqa") as SubjectKey,
-    grade: Number(input.grade) || 3,
+    subject: (input.subject ?? DEFAULT_SUBJECT) as SubjectKey,
+    grade: normalizeGrade(input.grade),
     instructions: input.instructions,
     groups: input.groups,
     items,
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
 
     if (Array.isArray(body.games) && body.games.length) {
       const results = [];
-      for (const g of body.games.slice(0, 50)) {
+      for (const g of body.games.slice(0, MAX_BULK_CUSTOM_GAMES)) {
         results.push(await createFromInput(g));
       }
       return NextResponse.json({ created: results.filter((r) => !("error" in r)).length, results });

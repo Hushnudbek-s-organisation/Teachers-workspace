@@ -29,6 +29,15 @@ import {
   actionStartUpload,
 } from "@/app/books/actions";
 import { Badge, Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
+import {
+  DEFAULT_GRADE,
+  DEFAULT_SUBJECT,
+  GRADES,
+  GRADES as GRADE_OPTIONS,
+  TEXT_PAGE_CHARS,
+  UPLOAD_BATCH_PAGES,
+  normalizeGrade,
+} from "@/lib/config";
 
 type JobStatus = "waiting" | "reading" | "uploading" | "analyzing" | "done" | "error";
 
@@ -46,7 +55,6 @@ interface Job {
   error?: string;
 }
 
-const BATCH = 20; // har bir server chaqiruvida yuboriladigan sahifalar soni
 
 export function BooksClient({ books }: { books: BookMeta[] }) {
   const router = useRouter();
@@ -55,7 +63,9 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
   const [dragging, setDragging] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
   const [pasteTitle, setPasteTitle] = useState("");
-  const [pasteSubject, setPasteSubject] = useState<SubjectKey>("matematika");
+  const [pasteSubject, setPasteSubject] = useState<SubjectKey>(DEFAULT_SUBJECT);
+  const [pasteGrade, setPasteGrade] = useState(DEFAULT_GRADE);
+  const [uploadGrade, setUploadGrade] = useState(DEFAULT_GRADE);
   const [pasteText, setPasteText] = useState("");
   const [pasting, setPasting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -89,7 +99,7 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
         sizeBytes: f.size,
         title,
         subject: guessSubject(f.name),
-        grade: 3,
+        grade: uploadGrade,
         status: "waiting",
         progress: "Navbatda",
         percent: 0,
@@ -124,9 +134,9 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
         } else {
           kind = "matn";
           const text = await file.text();
-          const CHUNK = 2500;
-          for (let c = 0, page = 1; c < text.length; c += CHUNK, page++) {
-            if (text.slice(c, c + CHUNK).trim()) pages.push({ page, text: text.slice(c, c + CHUNK) });
+          for (let c = 0, page = 1; c < text.length; c += TEXT_PAGE_CHARS, page++) {
+            const chunk = text.slice(c, c + TEXT_PAGE_CHARS);
+            if (chunk.trim()) pages.push({ page, text: chunk });
           }
           if (!pages.length) throw new Error("Fayl bo'sh.");
         }
@@ -141,8 +151,8 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
           kind,
         });
 
-        for (let p = 0; p < pages.length; p += BATCH) {
-          const batch = pages.slice(p, p + BATCH);
+        for (let p = 0; p < pages.length; p += UPLOAD_BATCH_PAGES) {
+          const batch = pages.slice(p, p + UPLOAD_BATCH_PAGES);
           await actionAppendPages(uploadId, batch);
           const percent = 58 + Math.round(((p + batch.length) / pages.length) * 27);
           updateJob(job.id, {
@@ -177,7 +187,7 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
     try {
       const res = await actionCreateFromText({
         title: pasteTitle.trim() || "Qo'lda kiritilgan kitob",
-        grade: 3,
+        grade: pasteGrade,
         subject: pasteSubject,
         text: pasteText,
       });
@@ -219,6 +229,26 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
         </div>
 
         <div className="p-5">
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+              Sinf:
+              <Select
+                value={uploadGrade}
+                onChange={(e) => setUploadGrade(normalizeGrade(e.target.value))}
+                className="w-28 py-1.5"
+              >
+                {GRADE_OPTIONS.map((g) => (
+                  <option key={g} value={g}>
+                    {g}-sinf
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <span className="text-xs text-slate-400">
+              Fan nomi fayl nomidan aniqlanadi (masalan: «3-sinf matematika.pdf»)
+            </span>
+          </div>
+
           <div
             onDragOver={(e) => {
               e.preventDefault();
@@ -264,7 +294,7 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
 
           {showPaste ? (
             <div className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <Field label="Kitob nomi">
                   <Input
                     value={pasteTitle}
@@ -277,6 +307,15 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
                     {SUBJECT_LIST.map((s) => (
                       <option key={s.key} value={s.key}>
                         {s.emoji} {s.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Sinf">
+                  <Select value={pasteGrade} onChange={(e) => setPasteGrade(normalizeGrade(e.target.value))}>
+                    {GRADE_OPTIONS.map((g) => (
+                      <option key={g} value={g}>
+                        {g}-sinf
                       </option>
                     ))}
                   </Select>
@@ -308,6 +347,7 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
                     <Badge className={SUBJECTS[job.subject].badge}>
                       {SUBJECTS[job.subject].emoji} {SUBJECTS[job.subject].label}
                     </Badge>
+                    <span className="text-xs text-slate-400">{job.grade}-sinf</span>
                     {job.status === "done" ? (
                       <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">Tayyor ✓</Badge>
                     ) : job.status === "error" ? (
@@ -405,9 +445,6 @@ function BookCard({ book, onDelete }: { book: BookMeta; onDelete: () => void }) 
 
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex flex-wrap gap-1.5">
-          <Badge className={book.mode === "namuna" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-slate-200 bg-slate-50 text-slate-600"}>
-            {book.mode === "namuna" ? "Namuna kitob" : "Yuklangan"}
-          </Badge>
           <Badge className="border-slate-200 bg-slate-50 text-slate-600">
             <Layers className="h-3 w-3" /> {book.stats.topics} mavzu
           </Badge>
@@ -434,8 +471,7 @@ function BookCard({ book, onDelete }: { book: BookMeta; onDelete: () => void }) 
               <Gamepad2 className="h-4 w-4" /> O'yinlarni ko'rish
             </Button>
           </Link>
-          {book.mode === "yuklangan" ? (
-            confirming ? (
+          {confirming ? (
               <div className="flex gap-1">
                 <Button variant="danger" className="px-2 py-1 text-xs" onClick={onDelete}>
                   O'chirish
@@ -448,8 +484,7 @@ function BookCard({ book, onDelete }: { book: BookMeta; onDelete: () => void }) 
               <Button variant="ghost" onClick={() => setConfirming(true)} title="Kitobni o'chirish">
                 <Trash2 className="h-4 w-4" />
               </Button>
-            )
-          ) : null}
+            )}
         </div>
       </div>
     </Card>
