@@ -30,7 +30,9 @@ ishlaydi (server qayta ishga tushganda yangilanadi).
 
 1. [supabase.com](https://supabase.com) da yangi project yarating.
 2. **SQL Editor** → **New query** → `supabase/schema.sql` tarkibini to'liq qo'yib **Run** qiling.
-   Fayl oxirida tekshiruv so'rovlari bor — ular jadvallar/VIEW'lar/RLS yaratilganini ko'rsatadi.
+   Fayl oxirida **tekshiruv so'rovi** bor (8-bo'lim) — Run qilgach 13 qator chiqadi va
+   har biri ✅/❌ ko'rsatadi (jadvallar, VIEW'lar, funksiyalar, trigger'lar, RLS, ustunlar).
+   Hammasi ✅ bo'lsa — sxema to'liq tayyor.
    Faylni **qayta run qilish ham xavfsiz** (hech narsa o'chirilmaydi).
    Noldan boshlash kerak bo'lsa — fayldagi `FRESH RESET` bloki (kommentdan chiqarib run qilinadi).
 3. (Ixtiyoriy) `supabase/seed.sql` ni run qiling — namoyish ma'lumotlari uchun.
@@ -43,7 +45,9 @@ ishlaydi (server qayta ishga tushganda yangilanadi).
    ```
 
 5. `npm run dev` — yon panel'da **«Supabase ulangan»** belgisi paydo bo'ladi.
-6. Tekshirish: `npm run test:supabase` — kitob → o'yin → natija zanjiri Supabase
+6. Ishlayotganini ko'rish: `/books` sahifasida kitob yuklang, so'ng SQL Editor'da
+   `select id, title, stats from books;` — qator paydo bo'lsa yozish ham ishlayapti.
+7. Tekshirish: `npm run test:supabase` — kitob → o'yin → natija zanjiri Supabase
    yo'lidan o'tishini (so'rovlarni ushlab) va yozilgan qatorlarni sxema qabul
    qilishini ko'rsatadi. Qo'shimcha: `npm i --no-save @electric-sql/pglite`.
 

@@ -448,10 +448,113 @@ end $$;
 -- end $$;
 
 -- ============================================================================
+-- 8. TEKSHIRUV — sxema to'liq o'rnatilganini ko'rsatadi (faqat o'qish).
+--    Har bir qator: nima tekshirildi, kutilgan soni, topilgani, holati, izohi.
+--    Hammasi ✅ bo'lsa — sxema tayyor. ❌ chiqsa: shu faylni qaytadan run qiling,
+--    agar yana ❌ bo'lsa — izoh ustunida qaysi obyekt yetishmayotgani yozilgan.
+-- ============================================================================
+
+with expected as (
+  select 'students' as t union all select 'parents' union all select 'teachers'
+  union all select 'schedules' union all select 'attendance' union all select 'dismissal'
+  union all select 'grades' union all select 'books' union all select 'custom_games'
+  union all select 'game_results'
+),
+exp_views as (
+  select 'v_daily_attendance' as v union all select 'v_monthly_attendance'
+  union all select 'v_class_performance' union all select 'v_subject_performance'
+  union all select 'v_student_overview' union all select 'v_today_birthdays'
+  union all select 'v_book_leaderboard'
+),
+exp_fn as (
+  select 'fn_touch_updated_at' as f union all select 'fn_attendance_rate'
+),
+exp_trg as (
+  select 'trg_books_touch' as g union all select 'trg_custom_games_touch'
+),
+exp_pol as (
+  select t.t as t, p.p as p
+  from expected t cross join (values ('select'),('insert'),('update'),('delete')) p(p)
+),
+missing_tables as (
+  select coalesce(string_agg(e.t, ', ' order by e.t), '') as lst
+  from expected e
+  where not exists (select 1 from information_schema.tables x
+                    where x.table_schema = 'public' and x.table_name = e.t)
+),
+missing_views as (
+  select coalesce(string_agg(v.v, ', ' order by v.v), '') as lst
+  from exp_views v
+  where not exists (select 1 from pg_views x where x.schemaname = 'public' and x.viewname = v.v)
+),
+actual as (
+  select
+    (select count(*) from expected e where exists (select 1 from information_schema.tables x
+        where x.table_schema = 'public' and x.table_name = e.t))                                       as tables_n,
+    (select count(*) from exp_views v where exists (select 1 from pg_views x
+        where x.schemaname = 'public' and x.viewname = v.v))                                            as views_n,
+    (select count(*) from exp_fn f where exists (select 1 from pg_proc x
+        join pg_namespace n on n.oid = x.pronamespace where n.nspname = 'public' and x.proname = f.f))  as fns_n,
+    (select count(*) from exp_trg g where exists (select 1 from pg_trigger x where x.tgname = g.g))      as trgs_n,
+    (select count(*) from exp_pol p where exists (select 1 from pg_policies x
+        where x.schemaname = 'public' and x.tablename = p.t and x.policyname = p.t || '_' || p.p))       as policies_n,
+    (select count(*) from expected e where exists (select 1 from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relname = e.t and c.relrowsecurity))                            as rls_n,
+    (select count(*) from information_schema.columns where table_schema = 'public'
+        and ((table_name = 'books'        and column_name = 'topics'       and data_type = 'jsonb')
+          or (table_name = 'books'        and column_name = 'topic_titles' and data_type = 'ARRAY')
+          or (table_name = 'custom_games' and column_name = 'items'        and data_type = 'jsonb')
+          or (table_name = 'game_results' and column_name = 'score'        and data_type = 'integer')))  as cols_n,
+    (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'books')        as books_cols,
+    (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'custom_games') as games_cols,
+    (select count(*) from pg_type where typname in ('attendance_status', 'dismissal_method'))            as enums_n,
+    (select count(*) from pg_indexes where schemaname = 'public' and indexname like 'idx_%')             as idx_n
+)
+select s."Tekshiruv", s."Kutilgan", s."Topildi", s."Holat", s."Izoh" from (
+  select 1 as ord, 'Jadvallar' as "Tekshiruv", '10' as "Kutilgan", a.tables_n::text as "Topildi",
+         case when a.tables_n = 10 then '✅' else '❌' end as "Holat", '' as "Izoh" from actual a
+  union all
+  select 2, 'VIEW''lar (tahlil)', '7', a.views_n::text, case when a.views_n = 7 then '✅' else '❌' end, '' from actual a
+  union all
+  select 3, 'Funksiyalar', '2', a.fns_n::text, case when a.fns_n = 2 then '✅' else '❌' end, '' from actual a
+  union all
+  select 4, 'Trigger''lar (updated_at)', '2', a.trgs_n::text, case when a.trgs_n = 2 then '✅' else '❌' end, '' from actual a
+  union all
+  select 5, 'RLS yoqilgan jadvallar', '10', a.rls_n::text, case when a.rls_n = 10 then '✅' else '❌' end, '' from actual a
+  union all
+  select 6, 'RLS siyosatlari (4 × 10)', '40', a.policies_n::text, case when a.policies_n = 40 then '✅' else '❌' end, '' from actual a
+  union all
+  select 7, 'Kitob/o''yin ustunlari (jsonb/array)', '4', a.cols_n::text, case when a.cols_n = 4 then '✅' else '❌' end, '' from actual a
+  union all
+  select 8, 'ENUM turlari', '2', a.enums_n::text, case when a.enums_n = 2 then '✅' else '❌' end, '' from actual a
+  union all
+  select 9, 'Indekslar (idx_*)', '20', a.idx_n::text, case when a.idx_n >= 20 then '✅' else '❌' end, '' from actual a
+  union all
+  select 10, 'books ustunlari', '13', a.books_cols::text, case when a.books_cols = 13 then '✅' else '❌' end, '' from actual a
+  union all
+  select 11, 'custom_games ustunlari', '15', a.games_cols::text, case when a.games_cols = 15 then '✅' else '❌' end, '' from actual a
+  union all
+  select 12, 'Yetishmayotgan jadvallar', '0',
+         (select count(*)::text from expected e where not exists (select 1 from information_schema.tables x
+            where x.table_schema = 'public' and x.table_name = e.t)),
+         case when exists (select 1 from expected e where not exists (select 1 from information_schema.tables x
+            where x.table_schema = 'public' and x.table_name = e.t)) then '❌' else '✅' end,
+         (select lst from missing_tables)
+  union all
+  select 13, 'Yetishmayotgan VIEW''lar', '0',
+         (select count(*)::text from exp_views v where not exists (select 1 from pg_views x
+            where x.schemaname = 'public' and x.viewname = v.v)),
+         case when exists (select 1 from exp_views v where not exists (select 1 from pg_views x
+            where x.schemaname = 'public' and x.viewname = v.v)) then '❌' else '✅' end,
+         (select lst from missing_views)
+) s order by s.ord;
+
+-- ============================================================================
 -- Tayyor! Keyingi qadam (ixtiyoriy): namoyish ma'lumotlari uchun
 -- `supabase/seed.sql` faylini ishga tushiring.
 --
--- Tekshirish uchun SQL Editor'da:
+-- Ma'lumot borligini ko'rish uchun:
 --   select count(*) from students;
 --   select id, title, grade, subject from books;
 --   select type, count(*) from custom_games group by type;
