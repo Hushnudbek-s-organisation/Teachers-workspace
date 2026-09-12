@@ -8,6 +8,8 @@ import {
   ArrowRight,
   Award,
   BookOpen,
+  Presentation,
+  Wand2,
   CalendarRange,
   ClipboardCheck,
   DoorOpen,
@@ -111,6 +113,41 @@ export default async function DashboardPage() {
           <ArrowRight className="h-4 w-4" />
         </div>
       </Link>
+
+      {/* ------------------- O'yin yasash / sinf bilan o'ynash ------------------ */}
+      <div className="mb-5 grid gap-3 sm:grid-cols-2">
+        <Link
+          href="/games"
+          className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition-all hover:border-violet-300 hover:shadow-sm"
+        >
+          <span className="rounded-xl bg-violet-50 p-2.5 text-violet-600">
+            <Wand2 className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-slate-900">O'z o'yiningizni yasang</span>
+            <span className="block text-xs text-slate-500">
+              13 xil o'yin turi · o'z so'zlaringiz va misollaringiz bilan
+            </span>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-violet-500" />
+        </Link>
+
+        <Link
+          href="/classroom"
+          className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition-all hover:border-amber-300 hover:shadow-sm"
+        >
+          <span className="rounded-xl bg-amber-50 p-2.5 text-amber-600">
+            <Presentation className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-slate-900">Sinf bilan o'ynash</span>
+            <span className="block text-xs text-slate-500">
+              Charxpalak · guruhlar viktorinasi · bingo kartalari
+            </span>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-amber-500" />
+        </Link>
+      </div>
 
       {/* ------------------------------- KPI cards ------------------------------ */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">

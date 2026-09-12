@@ -14,6 +14,7 @@ import {
   ListOrdered,
   Sparkles,
   Trophy,
+  Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -41,12 +42,24 @@ export interface BookPayload {
   topics: TopicCard[];
 }
 
+export interface CustomGameCard {
+  id: string;
+  title: string;
+  type: string;
+  typeLabel: string;
+  emoji: string;
+  items: number;
+  note: string;
+}
+
 export function BookDetail({
   book,
   leaderboard,
+  customGames = [],
 }: {
   book: BookPayload;
   leaderboard: LeaderRow[];
+  customGames?: CustomGameCard[];
 }) {
   const subjectMeta = Object.values(SUBJECTS).find((s) => s.label === book.subjectLabel) ?? SUBJECTS.boshqa;
   const [open, setOpen] = useState<number | null>(0);
@@ -115,6 +128,41 @@ export function BookDetail({
                 <span className="text-xs text-slate-400">{row.played} o'yin</span>
                 <span className="font-semibold text-emerald-600">{row.percent}%</span>
               </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      {/* ------------------- O'qituvchi yasagan o'yinlar ---------------------- */}
+      {customGames.length ? (
+        <Card className="p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <Wand2 className="h-4 w-4 text-violet-600" /> O'qituvchi yasagan o'yinlar ({customGames.length})
+            </h3>
+            <Link href="/games/new" className="text-xs font-medium text-indigo-600 hover:underline">
+              + Yangi o'yin yasash
+            </Link>
+          </div>
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {customGames.map((g) => (
+              <Link key={g.id} href={`/games/${g.id}`} className="group">
+                <div className="flex h-full flex-col gap-1.5 rounded-xl border border-violet-200 bg-violet-50/40 p-3 transition-all group-hover:border-violet-400">
+                  <div className="flex items-start gap-2">
+                    <span className="text-2xl">{g.emoji}</span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-800">{g.title}</p>
+                      <p className="text-[11px] text-slate-500">
+                        {g.typeLabel} · {g.items} element
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-500">{g.note}</p>
+                  <span className="mt-auto text-xs font-medium text-violet-600 group-hover:underline">
+                    O'ynash →
+                  </span>
+                </div>
+              </Link>
             ))}
           </div>
         </Card>

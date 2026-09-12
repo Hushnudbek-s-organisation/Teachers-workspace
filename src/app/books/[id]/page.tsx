@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { BookDetail, type BookPayload } from "@/components/books/BookDetail";
 import { getBook, leaderboard } from "@/lib/books/store";
+import { listCustomGames } from "@/lib/books/custom";
+import { GAME_TYPES } from "@/lib/books/types";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +13,7 @@ export default async function BookPage({ params }: { params: Promise<{ id: strin
   const book = await getBook(id);
   if (!book) notFound();
 
-  const leaders = await leaderboard(book.id, 5);
+  const [leaders, custom] = await Promise.all([leaderboard(book.id, 5), listCustomGames(book.id)]);
 
   // Mijozga faqat kerakli qismini yuboramiz (200 betli kitobda matn juda katta)
   const payload: BookPayload = {
@@ -37,5 +39,19 @@ export default async function BookPage({ params }: { params: Promise<{ id: strin
     })),
   };
 
-  return <BookDetail book={payload} leaderboard={leaders} />;
+  return (
+    <BookDetail
+      book={payload}
+      leaderboard={leaders}
+      customGames={custom.map((g) => ({
+        id: g.id,
+        title: g.title,
+        type: g.type,
+        typeLabel: GAME_TYPES[g.type].label,
+        emoji: GAME_TYPES[g.type].emoji,
+        items: g.items.length,
+        note: g.builtFrom.note,
+      }))}
+    />
+  );
 }

@@ -271,9 +271,11 @@ export function extractLists(pages: Array<{ page: number; text: string }>, limit
       const items = body
         .split(/[,;]/)
         .map((s) => s.replace(/[.!?]+$/, "").trim())
-        .filter((s) => s.length >= 3 && s.length <= 34 && wordsOf(s).length <= 4);
+        .filter((s) => s.length >= 1 && s.length <= 34 && wordsOf(s).length <= 4);
 
       if (items.length < 4) continue;
+      // Faqat sonlardan iborat ro'yxatlar boshqa o'yinlarda ishlatiladi
+      if (items.every((i) => /^\d+$/.test(i))) continue;
       const key = items.slice(0, 3).join("|");
       if (seen.has(key)) continue;
       seen.add(key);

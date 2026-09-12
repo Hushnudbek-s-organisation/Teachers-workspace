@@ -190,7 +190,9 @@ const ONA_TILI: SampleBookSpec = {
       title: "Unli va undosh tovushlar",
       section: "Fonetika",
       pages: 3,
-      content: `Qoida: O'zbek tilida oltita unli tovush bor: a, o, u, i, e, o'.
+      content: `Qoida: O'zbek tilida oltita unli tovush bor.
+Unlilar: a, o, u, i, e, o'.
+Undoshlar: b, d, f, g, h, j, k, l, m, n, p, q, r, s, t, v, x, y, z.
 Qoida: Undosh tovushlar soni yigirma to'rtta bo'lib, ular bo'g'in hosil qilmaydi.
 Misol: kitob — ki-tob, maktab — mak-tab.
 Unli tovush — bo'g'in hosil qiluvchi tovush.
@@ -440,6 +442,8 @@ Tuproqni shamol va suv yuvib ketishidan asrash kerak.
       content: `Hasharotlar — olti oyog'i va uch qismdan iborat tanasi bo'lgan mayda jonivorlar.
 Hasharotlar: chivin, pashsha, ari, kapalak, chumoli, qo'ng'iz.
 Qoida: Hasharotlarning tanasi bosh, ko'krak va qorindan iborat.
+Foydali hasharotlar: asalari, chumoli, kapalak, qo'ng'iz.
+Zararli hasharotlar: chivin, pashsha, kuya, kana.
 Asalarilar gullardan sharbat to'plab, asal tayyorlaydi.
 Chumolilar juda mehnatkash bo'lib, ular birgalikda yashaydi.
 1. Hasharotlarning tanasi qanday qismlardan iborat?
@@ -533,6 +537,8 @@ black — qora
 white — oq
 orange — to'q sariq
 brown — jigarrang
+Warm colours: red, orange, yellow.
+Cool colours: blue, green, violet.
 The sky is blue.
 The grass is green.
 My bag is black.

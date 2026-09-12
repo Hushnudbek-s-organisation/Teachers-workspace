@@ -10,6 +10,8 @@ Teacher & Admin Dashboard for a school management platform:
 | **`src/app/*` + `src/components/*`** | **Task 2** — Students / Parents / Teachers / Schedule CRUD, kunlik davomat, uyga ketish, baholash, birthday alert |
 | **`src/app/page.tsx` + `src/app/analytics`** | **Task 3** — Recharts dashboard: KPI kartalar, haftalik davomat grafigi, fanlar kesimida baholar, dismissal pie, hisobotlar |
 | **`src/lib/books/*` + `src/app/books/*`** | **Kitob → O'yin** — darslikni PDF'dan o'qib mavzularga bo'ladi va har bir mavzudan o'yinlar yasaydi (5 fan uchun namuna kitoblar bilan) |
+| **`src/lib/books/custom*` + `src/app/games/*`** | **O'qituvchi o'yin yasash** — 13 xil o'yin turi, o'z so'zlari/misollari bilan (matn yoki jadval orqali) |
+| **`src/app/classroom`** | **Sinf bilan o'ynash** — 🎡 charxpalak, 🏆 guruhlar viktorinasi (Kahoot uslubida), 🎟 bingo kartalari (chop etish) |
 
 ---
 
@@ -230,6 +232,18 @@ src/components/books/
   BookDetail.tsx   # mavzu akkordeoni, o'yin kartalari, leaderboard
   GamePlayer.tsx   # 7 xil o'yin interfeysi
 
+src/lib/books/custom.ts        # o'qituvchi o'yinlarini saqlash (.data/custom-games.json)
+src/lib/books/custom-parse.ts  # matn → o'yin elementlari (+ normallashtirish)
+src/lib/books/quiz-pool.ts     # doska viktorinasi uchun savollar havzasi
+
+src/app/games/                 # o'qituvchi o'yinlari (ro'yxat, yangi, o'ynash, tahrirlash)
+src/app/classroom/             # sinf bilan o'ynash: charxpalak, viktorina, bingo
+src/app/api/games/custom/      # o'yin yasash API
+
+src/components/games/          # GameBuilder (muharrir), CustomGameList
+src/components/classroom/      # Wheel, TeamQuiz, BingoGenerator
+src/components/books/GameBoards.tsx  # yangi taxtalar: balon, puzzle, harf, guruh, bingo
+
 scripts/
   ingest-pdf.mjs        # CLI: PDF → server
   test-book-engine.mts  # dvigatel testi
@@ -238,3 +252,89 @@ scripts/
 > **Eslatma:** `public/pdf.worker.min.mjs` — pdf.js ishchi fayli (brauzerda PDF o'qish uchun).
 > `npm ci` dan keyin kerak bo'lsa qayta nusxalang:
 > `cp node_modules/pdfjs-dist/build/pdf.worker.min.mjs public/`
+
+
+---
+
+# 🎮 O'yin turlari (13 xil)
+
+| O'yin | Belgisi | Nima qiladi | Qaysi fanga mos |
+| --- | --- | --- | --- |
+| **Test** | ❓ | Savolga 4 variantdan bittasi | hammasi |
+| **To'g'ri / noto'g'ri** | ⚖️ | Fikrni ✅ yoki ❌ bilan belgilash | matematika, tabiiy fan, qoidalar |
+| **Juftini top** | 🔗 | Chap va o'ng ustunni **sudrab** ulash | chet tili, ta'riflar |
+| **Xotira kartalari** | 🧠 | Kartalarni ochib juftlikni topish | so'z boyligi, formulalar |
+| **Bo'sh joyni to'ldir** | ✏️ | Gapdagi tushib qolgan so'z | ona tili, o'qish |
+| **Tartibla** | 🔀 | So'z/gap/sonlarni tartibga solish | ona tili, o'qish |
+| **Bo'laklardan yig' (puzzle)** | 🧩 | Bo'g'in/bo'laklardan so'z yasash | ona tili, o'qish, chet tili |
+| **Tushib qolgan harf** | 🔤 | `k_tob` → `kitob` | alifbe, imlo, chet tili |
+| **Xatoni top** | 🔍 | To'g'ri yozilganini topish | imlo, gap tuzilishi |
+| **Guruhlarga ajrat** | 🗂 | So'zlarni **sudrab** guruhga tashlash | tabiiy fan, so'z turkumlari |
+| **Tez hisob** | ⚡ | Misolni yechish | matematika |
+| **Balonni ot** | 🎈 | To'g'ri javobli balonni yorish (**vaqt bilan**) | matematika |
+| **Bingo kartasi** | 🎟 | Sinf bilan: o'qituvchi aytadi, o'quvchi belgilaydi | hammasi |
+
+Har bir tur **kitobdan avtomatik** ham, **o'qituvchi qo'li bilan** ham yasalishi mumkin.
+
+---
+
+# 🎡 Sinf bilan o'ynash (`/classroom`)
+
+| Format | Tavsif |
+| --- | --- |
+| **🎡 Charxpalak** | Navbat bilan o'quvchi chaqirish (sinf ro'yxatidan) yoki savol/so'z tanlash. Chiqqanlar ro'yxatdan chiqib ketadi — takrorlanmaydi. |
+| **🏆 Guruhlar viktorinasi** | Kahoot uslubida: savol doskada katta ko'rinadi, taymer ishlaydi, 2–4 guruhga ball qo'yiladi. Savollar kitob o'yinlaridan avtomatik yig'iladi. |
+| **🎟 Bingo kartalari** | O'z so'zlaringiz yoki kitob mavzusidan 1–20 ta unikal karta. 3×3, 4×4, 5×5. **Chop etib o'quvchilarga tarqatish** mumkin (Ctrl+P → PDF). |
+| Kitob o'yinlarida **🎟 Bingo** | Doskada o'ynaladigan interaktiv bingo: o'qituvchi paneli, belgilash, avtomatik BINGO aniqlash. |
+
+---
+
+# ✏️ O'qituvchi o'z o'yinini yasashi (`/games`)
+
+Kitob ham kerak emas — o'qituvchi o'z materialini kiritadi.
+
+### Tez usul (matn yozish)
+
+O'yin turini tanlab, qatorlarga yozadi — tizim o'zi tahlil qiladi:
+
+```
+matching / memory :   kitob — book
+grouping          :   olma — Mevalar
+truefalse         :   Suv 100°C da qaynaydi | to'g'ri
+fill              :   Kitob — bilim ______ | manbai
+missingletter     :   k_tob | kitob
+puzzle            :   kitob | ki,tob
+order             :   Gapni tartibla | Bugun | havo | issiq
+math / pop        :   24 + 38 = 62
+quiz / findmistake:   Poytaxti qaysi shahar? | Toshkent | Samarqand | Buxoro
+bingo             :   olma   (har bir qator — bitta karta)
+```
+
+Tizim **o'zi** qolganini qiladi:
+- test savollariga **chalg'ituvchi variantlar** yasaydi (sonlar uchun yaqin sonlar, so'zlar uchun o'xshash variantlar);
+- `k_tob` uchun **4 ta harf varianti** tayyorlaydi;
+- bo'laklar ko'rsatilmagan bo'lsa, so'zni **bo'g'inlarga** bo'ladi;
+- tushunilmagan qatorlarni **ko'rsatib beradi** (o'yinda ishlatilmaydi).
+
+Matn kiritilganda natija **darhol** ko'rinadi (brauzerda tahlil qilinadi, server kutilmaydi).
+
+### Jadval usuli
+
+Har bir savol/juftlikni alohida maydonlarda kiritish, to'g'ri javobni belgilash (**A/B/C/D**),
+qiyinlikni tanlash. Ikkala usulni almashtirib ishlatsa bo'ladi.
+
+### Boshqa imkoniyatlar
+- O'yinni **kitob va mavzuga bog'lash** — u holda kitob sahifasida ham ko'rinadi.
+- Har bir o'yinni **tahrirlash**, **o'chirish**, **havolasini ulashish** (o'quvchilarga yuborish).
+- Natijalar o'quvchi ismiga saqlanadi va **leaderboard**ga tushadi.
+
+### API orqali (bir nechta o'yinni birdan)
+
+```bash
+curl -X POST http://localhost:3000/api/games/custom \
+  -H "Content-Type: application/json" \
+  -d '{"games":[
+        {"title":"Mevalar","type":"grouping","subject":"tabiiy-fanlar","text":"olma — Mevalar\nkartoshka — Sabzavotlar"},
+        {"title":"Imlo","type":"missingletter","subject":"ona-tili","text":"k_tob | kitob"}
+      ]}'
+```

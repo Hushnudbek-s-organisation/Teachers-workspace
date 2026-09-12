@@ -102,7 +102,20 @@ export function guessSubject(text: string): SubjectKey {
 
 // -------------------------------- O'yinlar ---------------------------------
 
-export type GameType = "quiz" | "matching" | "fill" | "truefalse" | "order" | "math" | "memory";
+export type GameType =
+  | "quiz"
+  | "matching"
+  | "fill"
+  | "truefalse"
+  | "order"
+  | "math"
+  | "memory"
+  | "pop" // ⚽ Balonni ot — to'g'ri javobli balonni yorish (vaqt bilan)
+  | "puzzle" // 🧩 Bo'laklardan yig'ish (bo'g'in/so'z bo'laklari)
+  | "missingletter" // 🔤 Tushib qolgan harfni topish (k_tob)
+  | "findmistake" // 🔍 Xatoni topish / to'g'ri variantni tanlash
+  | "grouping" // 🗂 Guruhlarga ajratish (sudrab tashlash)
+  | "bingo"; // 🎟 Bingo kartasi (sinf bilan o'ynaladi)
 
 export interface GameTypeMeta {
   key: GameType;
@@ -162,6 +175,48 @@ export const GAME_TYPES: Record<GameType, GameTypeMeta> = {
     hint: "Kartalarni ochib, mos juftliklarni yodda saqlang",
     color: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700",
   },
+  pop: {
+    key: "pop",
+    label: "Balonni ot",
+    emoji: "🎈",
+    hint: "To'g'ri javob yozilgan balonni topib bosing — vaqt ketyapti!",
+    color: "border-rose-200 bg-rose-50 text-rose-700",
+  },
+  puzzle: {
+    key: "puzzle",
+    label: "Bo'laklardan yig'",
+    emoji: "🧩",
+    hint: "Bo'laklarni to'g'ri tartibda bosib, so'z yoki gapni yig'ing",
+    color: "border-teal-200 bg-teal-50 text-teal-700",
+  },
+  missingletter: {
+    key: "missingletter",
+    label: "Tushib qolgan harf",
+    emoji: "🔤",
+    hint: "So'zdagi tushib qolgan harfni toping (k_tob → kitob)",
+    color: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  },
+  findmistake: {
+    key: "findmistake",
+    label: "Xatoni top",
+    emoji: "🔍",
+    hint: "Variantlar ichidan to'g'ri yozilganini toping",
+    color: "border-yellow-200 bg-yellow-50 text-yellow-700",
+  },
+  grouping: {
+    key: "grouping",
+    label: "Guruhlarga ajrat",
+    emoji: "🗂",
+    hint: "So'zlarni sudrab (yoki bosib) to'g'ri guruhga joylang",
+    color: "border-blue-200 bg-blue-50 text-blue-700",
+  },
+  bingo: {
+    key: "bingo",
+    label: "Bingo kartasi",
+    emoji: "🎟",
+    hint: "Sinf bilan o'ynaladigan bingo: o'qituvchi so'z aytadi, o'quvchilar belgilaydi",
+    color: "border-pink-200 bg-pink-50 text-pink-700",
+  },
 };
 
 // ---- O'yin elementlari (game items) ----
@@ -203,13 +258,38 @@ export interface MathItem {
   options: number[];
 }
 
+/** Bo'laklardan yig'ish (bo'g'in, so'z bo'laklari) */
+export interface PuzzleItem {
+  prompt: string;
+  /** To'g'ri javob (to'liq so'z yoki gap) */
+  answer: string;
+  /** To'g'ri tartibdagi bo'laklar */
+  pieces: string[];
+}
+
+/** Tushib qolgan harf (k_tob → kitob) */
+export interface MissingLetterItem {
+  /** Harflari yashirilgan ko'rinish: "k_tob" */
+  display: string;
+  answer: string;
+  options: string[];
+}
+
+/** Erkin matn elementi (bingo kartasi, charxpalak uchun) */
+export interface TextItem {
+  text: string;
+}
+
 export type GameItem =
   | QuizItem
   | MatchingItem
   | FillItem
   | TrueFalseItem
   | OrderItem
-  | MathItem;
+  | MathItem
+  | PuzzleItem
+  | MissingLetterItem
+  | TextItem;
 
 export interface Game {
   id: string;
@@ -222,6 +302,11 @@ export interface Game {
     note: string;
     pages: number[];
   };
+  /** "grouping" o'yini uchun guruhlar ro'yxati */
+  groups?: string[];
+  /** O'qituvchi o'zi yasagan o'yin */
+  custom?: boolean;
+  createdAt?: string;
 }
 
 // --------------------------- Kitob ichidagi mavzu --------------------------

@@ -27,12 +27,24 @@ import type {
   GameItem,
   MatchingItem,
   MathItem,
+  MissingLetterItem,
   OrderItem,
+  PuzzleItem,
   QuizItem,
+  TextItem,
   TrueFalseItem,
 } from "@/lib/books/types";
 import { Button, Card, Select } from "@/components/ui";
 import { actionSaveResult } from "@/app/books/actions";
+import {
+  BingoBoard,
+  GroupingBoard,
+  MissingLetterBoard,
+  PopBoard,
+  PuzzleBoard,
+  textsFromItems,
+} from "./GameBoards";
+import { Progress, shuffleStable } from "./board-utils";
 
 interface StudentOption {
   id: string;
@@ -144,6 +156,18 @@ function gradientFor(type: Game["type"]): string {
       return "from-fuchsia-500 to-pink-500";
     case "order":
       return "from-violet-500 to-purple-600";
+    case "pop":
+      return "from-rose-500 to-orange-500";
+    case "puzzle":
+      return "from-teal-500 to-emerald-600";
+    case "missingletter":
+      return "from-cyan-500 to-blue-600";
+    case "findmistake":
+      return "from-yellow-500 to-amber-600";
+    case "grouping":
+      return "from-blue-500 to-indigo-600";
+    case "bingo":
+      return "from-pink-500 to-rose-600";
     default:
       return "from-slate-500 to-slate-700";
   }
@@ -164,6 +188,11 @@ function IntroScreen({ game, onStart }: { game: Game; onStart: () => void }) {
         <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
           Qiyinlik: {"⭐".repeat(game.difficulty)}
         </span>
+        {game.groups?.length ? (
+          <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-blue-700">
+            Guruhlar: {game.groups.join(" · ")}
+          </span>
+        ) : null}
         <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
           {game.builtFrom.note}
         </span>
@@ -306,29 +335,27 @@ function PlayArea({ game, onFinish }: { game: Game; onFinish: (score: number, to
       return <MemoryBoard items={game.items as MatchingItem[]} onFinish={onFinish} />;
     case "order":
       return <OrderBoard items={game.items as OrderItem[]} onFinish={onFinish} />;
+    case "pop":
+      return <PopBoard items={game.items as MathItem[]} onFinish={onFinish} />;
+    case "puzzle":
+      return <PuzzleBoard items={game.items as PuzzleItem[]} onFinish={onFinish} />;
+    case "missingletter":
+      return <MissingLetterBoard items={game.items as MissingLetterItem[]} onFinish={onFinish} />;
+    case "grouping":
+      return (
+        <GroupingBoard
+          items={game.items as MatchingItem[]}
+          groups={game.groups ?? []}
+          onFinish={onFinish}
+        />
+      );
+    case "bingo": {
+      const texts = game.items.every((i) => "text" in i) ? (game.items as TextItem[]) : textsFromItems(game.items);
+      return <BingoBoard items={texts} title={game.title} onFinish={onFinish} />;
+    }
     default:
       return <QuestionBoard game={game} onFinish={onFinish} />;
   }
-}
-
-function Progress({ index, total, score }: { index: number; total: number; score: number }) {
-  const percent = total ? Math.round((index / total) * 100) : 0;
-  return (
-    <div className="mb-4">
-      <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-500">
-        <span>
-          {Math.min(index + 1, total)} / {total}
-        </span>
-        <span className="text-emerald-600">✓ {score} ball</span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-    </div>
-  );
 }
 
 // ------------------------------ Savol taxtasi ------------------------------
@@ -476,29 +503,28 @@ function MatchingBoard({ items, onFinish }: { items: MatchingItem[]; onFinish: (
   const [leftSel, setLeftSel] = useState<number | null>(null);
   const [rightWrong, setRightWrong] = useState<number | null>(null);
   const [mistakes, setMistakes] = useState(0);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+  const [dragging, setDragging] = useState<number | null>(null);
 
-  const pickLeft = (i: number) => {
-    if (matched.includes(i)) return;
-    setLeftSel(i);
-  };
-
-  const pickRight = (pairIndex: number, rightText: string) => {
-    if (leftSel == null || matched.includes(pairIndex)) return;
-    const correct = items[leftSel].right === rightText && leftSel === pairIndex;
+  const tryMatch = (leftIndex: number, rightIndex: number, rightText: string) => {
+    if (matched.includes(leftIndex) || matched.includes(rightIndex)) return;
+    const correct = items[leftIndex].right === rightText && leftIndex === rightIndex;
     if (correct) {
-      const next = [...matched, leftSel];
+      const next = [...matched, leftIndex];
       setMatched(next);
       setLeftSel(null);
+      setDragging(null);
       if (next.length === items.length) {
         const score = Math.max(0, items.length - mistakes);
         setTimeout(() => onFinish(score, items.length), 700);
       }
     } else {
       setMistakes((m) => m + 1);
-      setRightWrong(pairIndex);
+      setRightWrong(rightIndex);
       setTimeout(() => {
         setRightWrong(null);
         setLeftSel(null);
+        setDragging(null);
       }, 650);
     }
   };
@@ -514,51 +540,75 @@ function MatchingBoard({ items, onFinish }: { items: MatchingItem[]; onFinish: (
         </span>
       </div>
       <p className="mb-4 text-center text-sm text-slate-500">
-        Chapdagi tushunchani bosing, so'ngra o'ngdan mos javobni tanlang
+        Chapdagi kartani <b>sudrab</b> o'ngdagi mos javobga tashlang (yoki avval chapni, keyin o'ngni bosing)
       </p>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-2">
+
+      <div className="flex items-stretch gap-3">
+        {/* Chap ustun */}
+        <div className="flex flex-1 flex-col gap-2">
           {leftCards.map((c) => {
             const isMatched = matched.includes(c.i);
             return (
-              <button
+              <div
                 key={`l${c.i}`}
-                onClick={() => pickLeft(c.i)}
-                disabled={isMatched || done}
+                draggable={!isMatched && !done}
+                onDragStart={() => setDragging(c.i)}
+                onDragEnd={() => setDragging(null)}
+                onClick={() => !isMatched && setLeftSel(c.i)}
                 className={cn(
-                  "rounded-xl border-2 px-3 py-3 text-left text-sm font-medium transition-all",
+                  "select-none rounded-xl border-2 px-3 py-3 text-sm font-medium transition-all",
                   isMatched
                     ? "border-emerald-300 bg-emerald-50 text-emerald-600 opacity-70"
                     : leftSel === c.i
                       ? "border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200"
-                      : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300"
+                      : "cursor-grab border-slate-200 bg-white text-slate-700 hover:border-indigo-300 active:cursor-grabbing",
+                  dragging === c.i && "opacity-40"
                 )}
               >
                 {c.text}
-              </button>
+              </div>
             );
           })}
         </div>
-        <div className="flex flex-col gap-2">
+
+        {/* Ulash chizig'i */}
+        <div className="flex flex-col items-center justify-center px-1 text-slate-300">
+          <span className="text-xs">⇒</span>
+        </div>
+
+        {/* O'ng ustun (tashlash maydonlari) */}
+        <div className="flex flex-1 flex-col gap-2">
           {rightCards.map((c) => {
             const isMatched = matched.includes(c.i);
             return (
-              <button
+              <div
                 key={`r${c.i}`}
-                onClick={() => pickRight(c.i, c.text)}
-                disabled={isMatched || done || leftSel == null}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(c.i);
+                }}
+                onDragLeave={() => setDragOver(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(null);
+                  if (dragging == null) return;
+                  tryMatch(dragging, c.i, c.text);
+                }}
+                onClick={() => leftSel != null && tryMatch(leftSel, c.i, c.text)}
                 className={cn(
-                  "rounded-xl border-2 px-3 py-3 text-left text-sm font-medium transition-all",
+                  "rounded-xl border-2 px-3 py-3 text-sm font-medium transition-all",
                   isMatched
                     ? "border-emerald-300 bg-emerald-50 text-emerald-600 opacity-70"
                     : rightWrong === c.i
                       ? "border-red-400 bg-red-50 text-red-600"
-                      : "border-slate-200 bg-white text-slate-700 hover:border-emerald-300",
-                  leftSel == null && !isMatched && "opacity-60"
+                      : dragOver === c.i
+                        ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-emerald-300",
+                  leftSel == null && !isMatched && dragging == null && "opacity-70"
                 )}
               >
                 {c.text}
-              </button>
+              </div>
             );
           })}
         </div>
@@ -763,19 +813,4 @@ function OrderBoard({ items, onFinish }: { items: OrderItem[]; onFinish: (s: num
 }
 
 // ---------------------------------------------------------------------------
-
-/** Seed'ga bog'liq barqaror aralashtirish (o'yin qayta chizilganda o'zgarmaydi) */
-function shuffleStable<T>(arr: readonly T[], seed: number): T[] {
-  const out = [...arr];
-  let s = seed * 9301 + 49297;
-  const rnd = () => {
-    s = (s * 9301 + 49297) % 233280;
-    return s / 233280;
-  };
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
 

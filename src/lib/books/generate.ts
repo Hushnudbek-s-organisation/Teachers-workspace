@@ -60,9 +60,28 @@ interface Ctx {
   authorPairs: BookLevelPair[];
   /** Kitobning boshqa mavzularidan olingan ta'riflar — "yolg'on" variantlar uchun */
   otherDefs: Pair[];
+  /** Mavzuning kalit so'zlari */
+  keywords: string[];
 }
 
-const MAX_ITEMS = { quiz: 8, matching: 6, fill: 8, truefalse: 8, order: 5, math: 12, memory: 6 };
+const MAX_ITEMS: Record<Game["type"], number> = {
+  quiz: 8,
+  matching: 6,
+  fill: 8,
+  truefalse: 8,
+  order: 5,
+  math: 12,
+  memory: 6,
+  pop: 10,
+  puzzle: 6,
+  missingletter: 8,
+  findmistake: 6,
+  grouping: 12,
+  bingo: 16,
+};
+
+/** Bir mavzudan ko'pi bilan shuncha o'yin chiqadi */
+const MAX_GAMES_PER_TOPIC = 7;
 
 // ---------------------------------------------------------------------------
 // Asosiy kirish nuqtasi
@@ -91,6 +110,7 @@ export function analyzeTopic(
     blanks: extractBlanks(pages),
     authorPairs: extras?.authorPairs ?? [],
     otherDefs: extras?.otherDefs ?? [],
+    keywords: keyphrases(raw.text, 26),
   };
 
   const strategy = SUBJECTS[subject]?.strategy ?? "generic";
@@ -113,6 +133,12 @@ export function analyzeTopic(
       break;
     default:
       games = genericGames(ctx);
+  }
+
+  // Har qanday fanga foydali qo'shimchalar
+  if (games.length < MAX_GAMES_PER_TOPIC) {
+    const bingo = buildBingoGame(ctx);
+    if (bingo && !games.some((g) => g.type === "bingo")) games.push(bingo);
   }
 
   const examples = toExamples(ctx.tasks).slice(0, 40);
@@ -288,6 +314,10 @@ function mathGames(ctx: Ctx): Game[] {
       )!
     );
   }
+
+  // 4.5) 🎈 Balonni ot — vaqtli hisoblash o'yini
+  const pop = buildPopGame(ctx);
+  if (pop) out.push(pop);
 
   // 5) Tushuncha va izoh (geometriya, kasrlar kabi mavzularda yaxshi ishlaydi)
   if (ctx.defs.length >= 3) {
@@ -488,13 +518,62 @@ function languageGames(ctx: Ctx): Game[] {
     );
   }
 
-  // 6) "Qaysi so'z to'g'ri yozilgan?" — imlo uchun qisqa test
-  const spelling = buildSpellingQuiz(ctx);
-  if (spelling.length >= 3) {
+  // 6) 🔤 Tushib qolgan harf (imlo uchun juda mos)
+  const missing = buildMissingLetterItems(ctx, MAX_ITEMS.missingletter);
+  if (missing.length >= 3) {
     out.push(
       makeGame(
-        "quiz",
-        "To'g'ri yozilganini tanlang",
+        "missingletter",
+        "Tushib qolgan harfni top",
+        "So'zdagi yashirilgan harfni topib, to'g'ri variantni bosing.",
+        missing,
+        ctx,
+        2,
+        "Mavzudagi so'zlar"
+      )!
+    );
+  }
+
+  // 7) 🔍 Xatoni top (imlo)
+  const mistakes = buildFindMistakeWords(ctx, MAX_ITEMS.findmistake);
+  if (mistakes.length >= 3) {
+    out.push(
+      makeGame(
+        "findmistake",
+        "Xatoni top: so'zlar",
+        "Variantlar ichidan to'g'ri yozilgan so'zni toping.",
+        mistakes,
+        ctx,
+        2,
+        "Mavzudagi so'zlar"
+      )!
+    );
+  }
+
+  // 8) 🔍 Xatoni top (gaplar tartibi)
+  const sentenceMistakes = buildFindMistakeSentences(ctx, MAX_ITEMS.findmistake);
+  const combined = [...mistakes, ...sentenceMistakes];
+  if (combined.length >= 3 && mistakes.length < 3) {
+    out.push(
+      makeGame(
+        "findmistake",
+        "Xatoni top",
+        "Variantlar ichidan to'g'ri yozilganini toping.",
+        combined.slice(0, MAX_ITEMS.findmistake),
+        ctx,
+        3,
+        "Mavzu matnidagi gaplar"
+      )!
+    );
+  }
+
+  // 9) "Qaysi so'z to'g'ri yozilgan?" — eski imlo testi (zaxira)
+  const spelling = buildSpellingQuiz(ctx);
+  if (spelling.length >= 3 && mistakes.length < 3) {
+    out.push(
+      makeGame(
+        "findmistake",
+        "Imlo testi",
         "So'zning to'g'ri yozilgan variantini tanlang.",
         spelling,
         ctx,
@@ -596,6 +675,42 @@ function readingGames(ctx: Ctx): Game[] {
     );
   }
 
+  // 6) 🧩 Bo'laklardan so'z yig'ish
+  const puzzle = buildPuzzleItems(ctx, MAX_ITEMS.puzzle);
+  if (puzzle.length >= 3) {
+    out.push(
+      makeGame(
+        "puzzle",
+        "Bo'laklardan so'z yig'",
+        "Bo'g'in yoki bo'laklarni to'g'ri tartibda bosib, so'zni yig'ing.",
+        puzzle,
+        ctx,
+        2,
+        "Matndagi so'zlar"
+      )!
+    );
+  }
+
+  // 7) 🔤 Tushib qolgan harf
+  const missing = buildMissingLetterItems(ctx, MAX_ITEMS.missingletter);
+  if (missing.length >= 3) {
+    out.push(
+      makeGame(
+        "missingletter",
+        "Tushib qolgan harf",
+        "So'zdagi yashirilgan harfni toping.",
+        missing,
+        ctx,
+        2,
+        "Matndagi so'zlar"
+      )!
+    );
+  }
+
+  // 8) 🎟 Bingo kartasi (sinf bilan)
+  const bingo = buildBingoGame(ctx);
+  if (bingo) out.push(bingo);
+
   return out.filter(Boolean) as Game[];
 }
 
@@ -685,6 +800,30 @@ function scienceGames(ctx: Ctx): Game[] {
     );
   }
 
+  // 6) 🗂 Guruhlarni ajratish (hayvonlar, o'simliklar, fasllar...)
+  const grouping = buildGroupingGame(ctx);
+  if (grouping) out.push(grouping);
+
+  // 7) 🧩 Bo'laklardan so'z yig'ish
+  const puzzle = buildPuzzleItems(ctx, MAX_ITEMS.puzzle);
+  if (puzzle.length >= 3) {
+    out.push(
+      makeGame(
+        "puzzle",
+        "Bo'laklardan so'z yig'",
+        "Bo'laklarni to'g'ri tartibda bosib, atamani yig'ing.",
+        puzzle,
+        ctx,
+        2,
+        "Mavzudagi atamalar"
+      )!
+    );
+  }
+
+  // 8) 🎟 Bingo kartasi
+  const bingo = buildBingoGame(ctx);
+  if (bingo) out.push(bingo);
+
   return out.filter(Boolean) as Game[];
 }
 
@@ -766,7 +905,45 @@ function foreignGames(ctx: Ctx): Game[] {
     );
   }
 
-  // 5) Bo'sh joyni to'ldir
+  // 5) 🧩 Harflardan so'z yig'ish (puzzle)
+  if (longWords.length >= 3) {
+    const items = shuffleSeeded(longWords, seed + "pz")
+      .slice(0, MAX_ITEMS.puzzle)
+      .map((w) => ({
+        prompt: "Bo'laklardan so'zni tiklang",
+        answer: w,
+        pieces: chunkWord(w, w.length <= 4 ? 2 : 3),
+      }));
+    out.push(
+      makeGame(
+        "puzzle",
+        "So'zni tiklash",
+        "Bo'laklarni to'g'ri tartibda bosib, inglizcha so'zni yig'ing.",
+        items,
+        ctx,
+        2,
+        "Lug'at so'zlari"
+      )!
+    );
+  }
+
+  // 6) 🔤 Tushib qolgan harf
+  const missing = buildMissingLetterItems(ctx, MAX_ITEMS.missingletter);
+  if (missing.length >= 3) {
+    out.push(
+      makeGame(
+        "missingletter",
+        "Tushib qolgan harf",
+        "Inglizcha so'zdagi yashirilgan harfni toping.",
+        missing,
+        ctx,
+        2,
+        "Lug'at so'zlari"
+      )!
+    );
+  }
+
+  // 7) Bo'sh joyni to'ldir
   if (ctx.blanks.length >= 3) {
     const pool = uniq(ctx.blanks.map((b) => b.answer));
     const items = ctx.blanks.slice(0, MAX_ITEMS.fill).map((b, i) => {
@@ -803,6 +980,14 @@ function genericGames(ctx: Ctx): Game[] {
 
   const order = buildSentenceOrder(ctx);
   if (order.length) out.push(makeGame("order", "Tartiblash", "To'g'ri tartibga soling.", order, ctx)!);
+
+  const puzzle = buildPuzzleItems(ctx, MAX_ITEMS.puzzle);
+  if (puzzle.length >= 3) {
+    out.push(makeGame("puzzle", "Bo'laklardan yig'", "So'zni bo'laklardan yig'ing.", puzzle, ctx)!);
+  }
+
+  const bingo = buildBingoGame(ctx);
+  if (bingo) out.push(bingo);
 
   return out.filter(Boolean) as Game[];
 }
@@ -1045,6 +1230,264 @@ const COMMON_UZ_WORDS = [
   "sayohat", "do'stlik", "mehnat", "orzular", "xursand", "futbol", "shifokor", "kema",
   "traktor", "sabzavot", "mevalar", "hayvon", "qushlar", "baliq", "kamalak", "shamollar",
 ];
+
+// ---------------------------------------------------------------------------
+// YANGI O'YIN TURLARI
+//   🎈 pop · 🧩 puzzle · 🔤 missingletter · 🔍 findmistake · 🗂 grouping · 🎟 bingo
+// ---------------------------------------------------------------------------
+
+/** So'zni bo'g'inlarga bo'lish (o'zbek tili qoidalariga yaqin evristika) */
+export function splitSyllables(word: string): string[] {
+  if (word.length < 3) return [word];
+  // "o'" va "g'" digraflarini bitta harfga aylantiramiz
+  const marked = word
+    .replace(/[oO][ʻʼ'’]/g, (m) => (m[0] === "O" ? "Ø" : "ø"))
+    .replace(/[gG][ʻʼ'’]/g, (m) => (m[0] === "G" ? "Ğ" : "ğ"));
+  const isVowel = (c: string) => "aeiouøØAEIOU".includes(c);
+  const chars = [...marked];
+  const splits: number[] = [];
+
+  for (let i = 0; i < chars.length; i++) {
+    if (!isVowel(chars[i])) continue;
+    // unlidan keyingi undoshlar sonini sanaymiz
+    let c = 0;
+    while (i + 1 + c < chars.length && !isVowel(chars[i + 1 + c])) c++;
+    const nextIsVowel = i + 1 + c < chars.length;
+    if (!nextIsVowel) continue;
+    if (c === 1) splits.push(i + 1); // ki|tob
+    else if (c >= 2) splits.push(i + 2); // mak|tab
+  }
+
+  const parts: string[] = [];
+  let last = 0;
+  for (const s of splits) {
+    if (s <= last || s >= chars.length) continue;
+    parts.push(chars.slice(last, s).join(""));
+    last = s;
+  }
+  parts.push(chars.slice(last).join(""));
+
+  const restore = (t: string) =>
+    t.replace(/ø/g, "o'").replace(/Ø/g, "O'").replace(/ğ/g, "g'").replace(/Ğ/g, "G'");
+  const out = parts.map(restore).filter((p) => p.length > 0);
+  return out.length > 1 ? out : [word];
+}
+
+/** 🧩 Bo'laklardan yig'ish — so'z bo'g'inlar yoki bo'laklardan tuziladi */
+function buildPuzzleItems(ctx: Ctx, limit: number, mode: "syllable" | "chunk" = "syllable"): GameItem[] {
+  const source = uniq([
+    ...ctx.keywords,
+    ...ctx.defs.map((d) => foldWord(d.left)),
+    ...(ctx.glossary.length ? ctx.glossary.map((g) => g.left.toLowerCase()) : []),
+  ]);
+  const words = source.filter((w) => {
+    const base = w.replace(/[^a-zа-яё']/gi, "");
+    if (base.length < 4 || base.length > 12) return false;
+    if (base.includes(" ") || /\d/.test(base)) return false;
+    return true;
+  });
+
+  const out: GameItem[] = [];
+  for (const w of shuffleSeeded(words, ctx.seed + "pz")) {
+    const pieces = mode === "syllable" ? splitSyllables(w) : chunkWord(w, 3);
+    if (pieces.length < 2 || pieces.length > 4) continue;
+    if (pieces.some((p) => p.length === 0)) continue;
+    out.push({
+      prompt:
+        mode === "syllable"
+          ? "Bo'g'inlardan so'zni yig'ing"
+          : "Bo'laklardan so'zni tiklang",
+      answer: w,
+      pieces,
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/** So'zni teng bo'laklarga bo'lish (bo'g'in chiqmasa) */
+function chunkWord(word: string, parts: number): string[] {
+  const n = Math.min(parts, Math.max(2, Math.round(word.length / 3)));
+  const size = Math.ceil(word.length / n);
+  const out: string[] = [];
+  for (let i = 0; i < word.length; i += size) out.push(word.slice(i, i + size));
+  return out;
+}
+
+/** 🔤 Tushib qolgan harf: "k_tob" → kitob */
+function buildMissingLetterItems(ctx: Ctx, limit: number): GameItem[] {
+  const words = uniq([
+    ...ctx.keywords,
+    ...(ctx.glossary.length ? ctx.glossary.map((g) => g.left.toLowerCase()) : []),
+  ]).filter((w) => /^[a-zа-яё'ʻʼ]{4,12}$/i.test(w) && !w.includes("'"));
+
+  const alphabet = "abcdefgijklmnopqrstuvxyz".split("");
+  const out: GameItem[] = [];
+
+  for (const w of shuffleSeeded(words, ctx.seed + "ml")) {
+    // ko'pincha unli harfni yashiramiz (imlo uchun muhim)
+    const vowelIdx = [...w].map((c, i) => ("aeiou".includes(c.toLowerCase()) ? i : -1)).filter((i) => i > 0);
+    const idx = vowelIdx.length ? vowelIdx[Math.floor(vowelIdx.length / 2)] : Math.floor(w.length / 2);
+    const letter = w[idx];
+    if (!letter) continue;
+    const display = w.slice(0, idx) + "_" + w.slice(idx + 1);
+    const distractors = shuffleSeeded(
+      alphabet.filter((c) => c !== letter.toLowerCase()),
+      ctx.seed + letter + idx
+    ).slice(0, 3);
+    out.push({
+      display,
+      answer: letter,
+      options: shuffleSeeded([letter, ...distractors], ctx.seed + "o" + display),
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/** 🔍 Xatoni top: to'g'ri yozilgan so'zni tanlash */
+function buildFindMistakeWords(ctx: Ctx, limit: number): GameItem[] {
+  const words = uniq(ctx.keywords.concat(ctx.defs.map((d) => foldWord(d.left)))).filter(
+    (w) => w.length >= 5 && /^[a-z']+$/.test(w)
+  );
+
+  const out: GameItem[] = [];
+  for (const w of words.slice(0, limit)) {
+    const variants = uniq([
+      w.replace(/(.)\1/, "$1"),
+      [...w].reverse().join(""),
+      w.replace(/[aeiou]/, "i"),
+      w.replace("o'", "o").replace("g'", "g"),
+      w.slice(0, -1) + w[w.length - 1] + w[w.length - 1],
+    ]).filter((v) => v !== w && v.length >= 3);
+    if (variants.length < 2) continue;
+    const opts = buildOptions(w, variants.slice(0, 3), ctx.seed + w);
+    out.push({
+      question: "Qaysi so'z to'g'ri yozilgan?",
+      options: opts.options,
+      answer: opts.answer,
+      hint: "Imloga diqqat qiling",
+    });
+  }
+  return out;
+}
+
+/** 🔍 Gaplar ichidan to'g'ri yozilganini topish */
+function buildFindMistakeSentences(ctx: Ctx, limit: number): GameItem[] {
+  const sentences = unitsOf(ctx.raw.text).filter((s) => {
+    const n = wordsOf(s).length;
+    return n >= 4 && n <= 12 && s.length <= 110;
+  });
+
+  const out: GameItem[] = [];
+  for (let i = 0; i < sentences.length && out.length < limit; i += 2) {
+    const correct = sentences[i];
+    const words = correct.replace(/[.!?]+$/, "").split(/\s+/);
+    if (words.length < 4) continue;
+
+    // Xato variant: qo'shni so'zlarni almashtiramiz
+    const broken = [...words];
+    const j = Math.max(0, Math.floor(words.length / 2) - 1);
+    [broken[j], broken[j + 1]] = [broken[j + 1], broken[j]];
+    const brokenSentence = broken.join(" ") + (correct.match(/[.!?]$/)?.[0] ?? ".");
+
+    if (brokenSentence === correct) continue;
+    const opts = buildOptions(correct, [brokenSentence], ctx.seed + "fs" + i);
+    if (opts.options.length < 2) continue;
+    out.push({
+      question: "Qaysi gap to'g'ri tuzilgan?",
+      options: opts.options,
+      answer: opts.answer,
+      hint: "So'zlar tartibiga e'tibor bering",
+    });
+  }
+  return out;
+}
+
+const TASK_LABEL = /\b(yozing|toping|ayting|hisoblang|o'qing|to'ldiring|tuzing|tanlang|ajrating|bajaring|tekshiring|javob|savol|misol|masala|mashq|topshiriq|jadval|rasm)\b/i;
+
+/** 🗂 Guruhlarga ajratish — kitobdagi "Guruh: a, b, c" ro'yxatlaridan */
+function buildGroupingGame(ctx: Ctx): Game | null {
+  const labeled = ctx.lists.filter((l) => {
+    const label = l.label?.trim();
+    if (!label || label.length < 3 || label.length > 32) return false;
+    if (TASK_LABEL.test(label)) return false;
+    if (/\d/.test(label)) return false;
+    return l.items.length >= 3;
+  });
+  if (labeled.length < 2) return null;
+
+  // "Hasharotlar" ⊄ "Foydali hasharotlar": umumiy nomni olib tashlab, aniqroqlarini qoldiramiz
+  const allLabels = uniq(labeled.map((l) => l.label!.trim()));
+  const specific = allLabels.filter(
+    (label) => !allLabels.some((other) => other !== label && foldWord(other).includes(foldWord(label)))
+  );
+  const groups = (specific.length >= 2 ? specific : allLabels).slice(0, 3);
+  if (groups.length < 2) return null;
+
+  const items: GameItem[] = [];
+  for (const g of groups) {
+    const list = labeled.find((l) => l.label!.trim() === g)!;
+    for (const it of list.items.slice(0, 4)) {
+      items.push({ left: it, right: g });
+    }
+  }
+  if (items.length < 6) return null;
+
+  const game = makeGame(
+    "grouping",
+    "Guruhlarga ajrat",
+    "So'zlarni sudrab (yoki bosib) tegishli guruhga joylang.",
+    shuffleSeeded(items, ctx.seed + "gr"),
+    ctx,
+    2,
+    `Kitobdagi ${groups.length} ta ro'yxat asosida`
+  );
+  if (game) game.groups = groups;
+  return game;
+}
+
+/** 🎟 Bingo kartasi — mavzu so'zlari/raqamlaridan */
+function buildBingoGame(ctx: Ctx, cells = 9): Game | null {
+  const pool = uniq([
+    ...ctx.keywords,
+    ...keyphrases(ctx.raw.text, 26),
+    ...(ctx.raw.text.match(/\b\d{1,4}\b/g) ?? []).map(String),
+  ]).filter((w) => w.length >= 3);
+
+  if (pool.length < cells) return null;
+  const chosen = shuffleSeeded(pool, ctx.seed + "bingo").slice(0, cells);
+
+  const game = makeGame(
+    "bingo",
+    "Bingo kartasi",
+    "Kartani chop eting yoki doskaga chiqaring: o'qituvchi so'z aytadi, o'quvchilar belgilaydi.",
+    chosen.map((text) => ({ text })),
+    ctx,
+    1,
+    "Mavzu so'zlari"
+  );
+  return game;
+}
+
+/** 🎈 Balonni ot — to'g'ri javobli balonni yorish (vaqt bilan) */
+function buildPopGame(ctx: Ctx): Game | null {
+  if (ctx.math.length < 4) return null;
+  const items = ctx.math.slice(0, MAX_ITEMS.pop).map((m) => {
+    const distractors = numericDistractors(m.answer, 4, ctx.seed + "pop" + m.expression);
+    const options = shuffleSeeded([m.answer, ...distractors], ctx.seed + "popo" + m.expression);
+    return { expression: `${m.expression} = ?`, answer: m.answer, options };
+  });
+  return makeGame(
+    "pop",
+    "Balonni ot",
+    "Har bir misol uchun to'g'ri javob yozilgan balonni topib bosing. Vaqt ketmoqda!",
+    items,
+    ctx,
+    2,
+    `Kitobdagi ${items.length} ta misol`
+  );
+}
 
 /** Kitobda "Asar nomi. Muallif" ko'rinishidagi juftliklarni topadi */
 export function extractAuthorPairs(text: string, limit = 24): BookLevelPair[] {
