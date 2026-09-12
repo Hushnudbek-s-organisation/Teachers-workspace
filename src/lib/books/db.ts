@@ -14,6 +14,8 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Book, BookMeta, GameResult } from "./types";
 import type { CustomGame } from "./custom";
+import { guardWrite, safeRead, safeReadOne } from "../db-status";
+import { supabaseFetch } from "../supabase-fetch";
 
 let cached: SupabaseClient | null = null;
 
@@ -30,7 +32,10 @@ function client(): SupabaseClient {
       "Supabase sozlanmagan: .env.local faylida NEXT_PUBLIC_SUPABASE_URL va kalitni to'ldiring."
     );
   }
-  cached = createClient(url, key, { auth: { persistSession: false } });
+  cached = createClient(url, key, {
+    auth: { persistSession: false },
+    global: { fetch: supabaseFetch },
+  });
   return cached;
 }
 
@@ -101,28 +106,35 @@ function rowToMeta(row: BookRow): BookMeta {
 }
 
 export async function dbListBooks(): Promise<Book[]> {
-  const res = await client().from("books").select("*").order("created_at", { ascending: false });
-  assertSchema(res.error, "books");
-  return ((res.data ?? []) as BookRow[]).map(rowToBook);
+  return safeRead("dbListBooks", async () => {
+    const res = await client().from("books").select("*").order("created_at", { ascending: false });
+    assertSchema(res.error, "books");
+    return ((res.data ?? []) as BookRow[]).map(rowToBook);
+  });
 }
 
 /** Ro'yxat sahifasi: og'ir `topics` maydonisiz */
 export async function dbListBookMetas(): Promise<BookMeta[]> {
-  const res = await client()
-    .from("books")
-    .select("id,title,grade,subject,subject_label,language,author,source,stats,topic_titles,created_at")
-    .order("created_at", { ascending: false });
-  assertSchema(res.error, "books");
-  return ((res.data ?? []) as unknown as BookRow[]).map(rowToMeta);
+  return safeRead("dbListBookMetas", async () => {
+    const res = await client()
+      .from("books")
+      .select("id,title,grade,subject,subject_label,language,author,source,stats,topic_titles,created_at")
+      .order("created_at", { ascending: false });
+    assertSchema(res.error, "books");
+    return ((res.data ?? []) as unknown as BookRow[]).map(rowToMeta);
+  });
 }
 
 export async function dbGetBook(id: string): Promise<Book | null> {
-  const res = await client().from("books").select("*").eq("id", id).maybeSingle();
-  assertSchema(res.error, "books");
-  return res.data ? rowToBook(res.data as BookRow) : null;
+  return safeReadOne("dbGetBook", async () => {
+    const res = await client().from("books").select("*").eq("id", id).maybeSingle();
+    assertSchema(res.error, "books");
+    return res.data ? rowToBook(res.data as BookRow) : null;
+  });
 }
 
 export async function dbSaveBook(book: Book): Promise<void> {
+  await guardWrite("dbSaveBook", async () => {
   const row: BookRow = {
     id: book.id,
     title: book.title,
@@ -139,12 +151,15 @@ export async function dbSaveBook(book: Book): Promise<void> {
   };
   const res = await client().from("books").upsert(row, { onConflict: "id" });
   assertSchema(res.error, "books");
+  });
 }
 
 export async function dbDeleteBook(id: string): Promise<boolean> {
-  const res = await client().from("books").delete().eq("id", id).select("id");
-  assertSchema(res.error, "books");
-  return (res.data?.length ?? 0) > 0;
+  return guardWrite("dbDeleteBook", async () => {
+    const res = await client().from("books").delete().eq("id", id).select("id");
+    assertSchema(res.error, "books");
+    return (res.data?.length ?? 0) > 0;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -186,14 +201,17 @@ function rowToResult(row: ResultRow): GameResult {
 }
 
 export async function dbListResults(bookId?: string): Promise<GameResult[]> {
-  let query = client().from("game_results").select("*").order("created_at", { ascending: false });
-  if (bookId) query = query.eq("book_id", bookId);
-  const res = await query;
-  assertSchema(res.error, "game_results");
-  return ((res.data ?? []) as ResultRow[]).map(rowToResult);
+  return safeRead("dbListResults", async () => {
+    let query = client().from("game_results").select("*").order("created_at", { ascending: false });
+    if (bookId) query = query.eq("book_id", bookId);
+    const res = await query;
+    assertSchema(res.error, "game_results");
+    return ((res.data ?? []) as ResultRow[]).map(rowToResult);
+  });
 }
 
 export async function dbSaveResult(result: GameResult): Promise<void> {
+  await guardWrite("dbSaveResult", async () => {
   const res = await client().from("game_results").insert({
     id: result.id,
     book_id: result.bookId,
@@ -210,6 +228,7 @@ export async function dbSaveResult(result: GameResult): Promise<void> {
     created_at: result.createdAt,
   });
   assertSchema(res.error, "game_results");
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -253,20 +272,25 @@ function rowToCustom(row: CustomRow): CustomGame {
 }
 
 export async function dbListCustomGames(bookId?: string): Promise<CustomGame[]> {
-  let query = client().from("custom_games").select("*").order("created_at", { ascending: false });
-  if (bookId) query = query.eq("book_id", bookId);
-  const res = await query;
-  assertSchema(res.error, "custom_games");
-  return ((res.data ?? []) as CustomRow[]).map(rowToCustom);
+  return safeRead("dbListCustomGames", async () => {
+    let query = client().from("custom_games").select("*").order("created_at", { ascending: false });
+    if (bookId) query = query.eq("book_id", bookId);
+    const res = await query;
+    assertSchema(res.error, "custom_games");
+    return ((res.data ?? []) as CustomRow[]).map(rowToCustom);
+  });
 }
 
 export async function dbGetCustomGame(id: string): Promise<CustomGame | null> {
-  const res = await client().from("custom_games").select("*").eq("id", id).maybeSingle();
-  assertSchema(res.error, "custom_games");
-  return res.data ? rowToCustom(res.data as CustomRow) : null;
+  return safeReadOne("dbGetCustomGame", async () => {
+    const res = await client().from("custom_games").select("*").eq("id", id).maybeSingle();
+    assertSchema(res.error, "custom_games");
+    return res.data ? rowToCustom(res.data as CustomRow) : null;
+  });
 }
 
 export async function dbUpsertCustomGame(game: CustomGame): Promise<void> {
+  await guardWrite("dbUpsertCustomGame", async () => {
   const res = await client()
     .from("custom_games")
     .upsert(
@@ -289,10 +313,13 @@ export async function dbUpsertCustomGame(game: CustomGame): Promise<void> {
       { onConflict: "id" }
     );
   assertSchema(res.error, "custom_games");
+  });
 }
 
 export async function dbDeleteCustomGame(id: string): Promise<boolean> {
-  const res = await client().from("custom_games").delete().eq("id", id).select("id");
-  assertSchema(res.error, "custom_games");
-  return (res.data?.length ?? 0) > 0;
+  return guardWrite("dbDeleteCustomGame", async () => {
+    const res = await client().from("custom_games").delete().eq("id", id).select("id");
+    assertSchema(res.error, "custom_games");
+    return (res.data?.length ?? 0) > 0;
+  });
 }

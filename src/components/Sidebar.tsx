@@ -11,6 +11,7 @@ import {
   ClipboardCheck,
   GraduationCap,
   LayoutDashboard,
+  LifeBuoy,
   School,
   Users,
   UserRound,
@@ -75,6 +76,13 @@ export function Sidebar({ mode }: { mode: "supabase" | "demo" }) {
       </div>
       <NavLinks orientation="vertical" />
       <div className="mt-auto px-6 py-5">
+        <Link
+          href="/setup"
+          className="mb-2 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
+        >
+          <LifeBuoy className="h-4 w-4" />
+          Sozlash tekshiruvi
+        </Link>
         <div
           className={cn(
             "rounded-lg px-3 py-2 text-xs font-medium",
