@@ -8,7 +8,15 @@
 // ============================================================================
 
 import type { ExampleKind, SubjectKey, TopicExample } from "./types";
-import { splitSentences, splitLines, stripNumbering, numberedItemNumber, wordsOf, foldWord } from "./text";
+import {
+  splitSentences,
+  splitLines,
+  stripNumbering,
+  numberedItemNumber,
+  wordsOf,
+  foldWord,
+  splitColumns,
+} from "./text";
 
 // ------------------------------ 1. Arifmetika -------------------------------
 
@@ -158,7 +166,13 @@ const UZ_WORD = /^[a-zA-Zа-яА-ЯёЁʻʼ''-][a-zA-Zа-яА-ЯёЁʻʼ'\s-]{1,
 
 /**
  * Chet tili darsliklaridagi "apple — olma" juftliklarini topadi.
- * Shuningdek jadval ko'rinishidagi "so'z: tarjima" qatorlarini ham oladi.
+ *
+ * Uch xil yozuvni taniydi:
+ *   1. "apple — olma"            (chiziqcha/ikki nuqta bilan)
+ *   2. "apple: olma"
+ *   3. "apple   olma"            (JADVAL/ustun ko'rinishi — pdf.js ustunlar
+ *                                 orasidagi katta bo'shliqni saqlab beradi,
+ *                                 cleanExtractedText uni COLUMN_GAP qiladi)
  */
 export function extractGlossary(text: string, limit = 40): Pair[] {
   const out: Pair[] = [];
@@ -166,11 +180,22 @@ export function extractGlossary(text: string, limit = 40): Pair[] {
 
   for (const line of splitLines(text)) {
     const clean = stripNumbering(line).replace(/[.;]$/, "").trim();
-    if (clean.length < 6 || clean.length > 90) continue;
+    if (clean.length < 5 || clean.length > 90) continue;
+
+    let left = "";
+    let right = "";
     const m = clean.match(/^(.{1,30}?)\s*(?:—|–|-|:)\s*(.{1,30})$/);
-    if (!m) continue;
-    const left = m[1].trim();
-    const right = m[2].trim();
+    if (m) {
+      left = m[1].trim();
+      right = m[2].trim();
+    } else {
+      // Ustunli (jadval) lug'at: "shirt   ko'ylak"
+      const cols = splitColumns(clean);
+      if (cols.length !== 2) continue;
+      [left, right] = cols;
+      // Ikkala ustun ham bir xil yozuvda bo'lsa (masalan raqamli jadval) — yaramaydi
+      if (!/[a-zA-Z]/.test(left) || !/[a-zA-Z]/.test(right)) continue;
+    }
     if (!LATIN_WORD.test(left)) continue;
     if (!UZ_WORD.test(right)) continue;
     if (!/[a-zA-Z]/.test(right)) continue;

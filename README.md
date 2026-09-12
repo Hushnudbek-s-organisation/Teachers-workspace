@@ -61,6 +61,40 @@ ishlaydi (server qayta ishga tushganda yangilanadi).
 
 ---
 
+## 🩺 Ishlamayaptimi? — Sozlash tekshiruvi (`/setup`)
+
+Production'da sahifa ochilmasa (masalan **"An error occurred in the Server Components
+render"** + `digest`), endi taxmin qilish shart emas:
+
+| Qayerda | Nima ko'rinadi |
+| --- | --- |
+| `/setup` | Ulanish holati, **10 jadval + 7 VIEW** alohida tekshiriladi, xatoning **haqiqiy matni** va tuzatish yo'li |
+| `/api/health` | Xuddi shu holat JSON ko'rinishida (monitoring uchun; muammo bo'lsa **HTTP 503**) |
+| Har sahifa tepasi | `DbAlert` ogohlantirishi: nima buzilgani va `/setup` havolasi |
+| Xato sahifasi | `error.tsx` / `global-error.tsx`: `digest`, 3 asosiy sabab, «Qayta urinish», `/setup` |
+| Server logi | Vercel → Logs: xato matni + `digest` + maslahat (`src/instrumentation.ts`) |
+
+**Eng ko'p uchraydigan 3 sabab:**
+
+1. **URL/kalit noto'g'ri yoki loyiha pauzada** — Supabase Dashboard'ni oching (loyiha
+   30–60 soniyada «uyg'onadi»), so'ng `/setup` dagi «Qayta tekshirish» tugmasini bosing.
+2. **`supabase/schema.sql` ishga tushirilmagan** — `/setup` qaysi jadval/VIEW yo'qligini
+   nomma-nom ko'rsatadi (`relation "books" does not exist` kabi xato bilan).
+3. **Kod xatosi** — `/setup` hammasi ✅ ko'rsatsa, `digest` ni Vercel logidagi yozuv bilan solishtiring.
+
+**Ilova qanday qulaydi (yoki qulamasligi):**
+
+- **O'qish** so'rovlari xatoga chidamli: baza javob bermasa sahifa **yiqilmaydi** —
+  bo'sh ro'yxat + tepada ogohlantirish (`src/lib/db-status.ts`).
+- **Yozish** so'rovlari xatoni yashirmaydi: foydalanuvchi «saqlanmadi»ni aniq ko'radi.
+- Har so'rovga **10 soniya taymer** (`src/lib/supabase-fetch.ts`) — sahifa cheksiz kutmaydi;
+  `fetch failed` kabi xabarlar sabab + maslahatga aylantiriladi.
+- Ulanish uzilganidan keyin **30 soniya** tarmoqqa chiqilmaydi (sahifalar 7–10 soniya
+  kutib qolmasligi uchun), so'ng so'rovlar avtomatik qayta uriniladi.
+- Ulanish xatosi bo'lsa `/setup` **bitta** xato bilan to'xtaydi — 17 ta so'rovni behuda kutmaydi.
+
+---
+
 ## 📊 Funksiyalar
 
 ### 1. Dinamik ma'lumotlar (to'liq CRUD + tahlil)

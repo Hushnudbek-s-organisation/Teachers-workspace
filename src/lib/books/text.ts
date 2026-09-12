@@ -25,7 +25,11 @@ export function cleanExtractedText(raw: string): string {
   t = t.replace(/[–—−]/g, "—");
   t = t.replace(/\u00A0/g, " ");
 
-  const lines = t.split("\n").map((l) => l.replace(/[ \t]+/g, " ").trim());
+  // MUHIM: ustunli (jadval) matnlarda pdf.js ustunlar orasidagi katta
+  // bo'shliqni alohida bo'lak qilib beradi. Uni bitta bo'shliqqa
+  // yig'ib yuborsak, "shirt   ko'ylak" juftligi yo'qoladi. Shuning uchun
+  // 2+ bo'shliq/tab → COLUMN_GAP (3 bo'shliq) sifatida saqlanadi.
+  const lines = t.split("\n").map((l) => normalizeLineGaps(l));
   const out: string[] = [];
   for (const line of lines) {
     // Sahifa raqami: "12", "- 12 -", "12-bet"
@@ -63,6 +67,28 @@ export function foldWord(s: string): string {
     .replace(/[ʻʼ‘’`´']/g, "'")
     .replace(/[^a-zа-яё0-9'\s]/gi, "")
     .trim();
+}
+
+
+/** Ustunlar orasidagi katta bo'shliq belgisi (3 bo'shliq) */
+export const COLUMN_GAP = "   ";
+
+/**
+ * Qatordagi bo'shliqlarni normallashtiradi:
+ *   • tab → bo'shliq
+ *   • 2+ bo'shliq → COLUMN_GAP (ustun chegarasi saqlanadi)
+ *   • boshidagi/oxiridagi bo'shliqlar olib tashlanadi
+ */
+export function normalizeLineGaps(line: string): string {
+  return line.replace(/\t/g, " ").trim().replace(/ {2,}/g, COLUMN_GAP);
+}
+
+/** Qatorni ustunlarga bo'ladi ("shirt   ko'ylak" → ["shirt", "ko'ylak"]) */
+export function splitColumns(line: string): string[] {
+  return line
+    .split(/ {2,}/)
+    .map((c) => c.trim())
+    .filter(Boolean);
 }
 
 // ---------------------------------- Gaplar ----------------------------------

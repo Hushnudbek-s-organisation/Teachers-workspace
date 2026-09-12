@@ -175,6 +175,32 @@ export function calibrateTocOffset(entries: TocEntry[], bookPages: BookPage[], t
 const STRONG_HEADING =
   /^\s*(?:(\d{1,3})\s*[.)-]?\s*(mavzu|dars|боб|тема|§)\b|(mavzu|dars|§)\s*[-–]?\s*(\d{1,3})\b)/i;
 
+/**
+ * So'z bilan boshlanadigan bo'lim sarlavhalari:
+ * "Unit 1", "Lesson 3", "Chapter 4", "Bo'lim 2", "Qism 3", "Fasl 1", "Раздел 2"
+ */
+const LABELED_HEADING =
+  /^\s*(unit|lesson|chapter|section|module|topic|bo'?lim|bo`lim|qism|fasl|bob|боб|модул(?:ь)?|раздел|глава|урок|тема)\s*[-–]?\s*(\d{1,3})\b/i;
+
+/**
+ * Raqam + KATTA HARFLI nom: "1. CLOTHES AND SHOES"
+ * (chet tili lug'atlari/darsliklarida bo'lim sarlavhalari shunday yoziladi)
+ */
+const NUMBERED_CAPS_HEADING = /^\s*(\d{1,3})\s*[.)]\s*(.+)$/;
+
+/**
+ * Sarlavha nomi KATTA HARFLARDA yozilganmi?
+ * Raqamli misollar ("1. 30 + 12 = 42") sarlavha deb olinmaydi.
+ */
+function isCapsTitle(rest: string): boolean {
+  const t = rest.trim();
+  if (t.length < 3 || t.length > 70) return false;
+  if (/[a-zа-яё]/.test(t)) return false; // kichik harf bor → sarlavha emas
+  if (/^[\d\s+\-−–—×·*÷=:.,()%]+$/.test(t)) return false; // arifmetik misol
+  const letters = t.replace(/[^A-Za-zА-Яа-яЁёʻ']/g, "");
+  return letters.length >= 3;
+}
+
 const NON_TOPIC_HEADING =
   /^(mundarija|contents|содержание|mavzu nomi|bet|sahifa|kirish so'zi|so'z boshi|shartli belgilar)\b/;
 
@@ -211,8 +237,19 @@ export function findHeadings(bookPages: BookPage[]): HeadingHit[] {
       let title = line;
 
       const strong = line.match(STRONG_HEADING);
+      const labeled = line.match(LABELED_HEADING);
+      const numberedCaps = line.match(NUMBERED_CAPS_HEADING);
+
       if (strong) {
         score = 0.95;
+        title = cleanHeading(line);
+      } else if (labeled && line.length <= 70 && !/[.!?,;:]$/.test(line)) {
+        // "Unit 1", "Bo'lim 2" …
+        score = 0.93;
+        title = cleanHeading(line);
+      } else if (numberedCaps && isCapsTitle(numberedCaps[2])) {
+        // "1. CLOTHES AND SHOES"
+        score = 0.9;
         title = cleanHeading(line);
       } else if (
         line.length >= 5 &&
@@ -245,6 +282,33 @@ export function findHeadings(bookPages: BookPage[]): HeadingHit[] {
     }
   }
   return hits;
+}
+
+/**
+ * Mundarija / bo'limlar ro'yxati betini aniqlaydi.
+ *
+ * Bunday betda sarlavha ko'p, matn kam bo'ladi. Uni mavzu deb olsak,
+ * kitobda mavjud bo'lmagan "mavzu" paydo bo'lardi (faqat nomlar ro'yxati).
+ */
+export const LIST_PAGE_MAX_BODY_CHARS = 240;
+
+export function findListPages(pages: BookPage[], hits: HeadingHit[]): Set<number> {
+  const perPage = new Map<number, { count: number; headingChars: number }>();
+  for (const h of hits) {
+    const cur = perPage.get(h.page) ?? { count: 0, headingChars: 0 };
+    cur.count += 1;
+    cur.headingChars += h.title.length;
+    perPage.set(h.page, cur);
+  }
+
+  const out = new Set<number>();
+  for (const p of pages) {
+    const info = perPage.get(p.page);
+    if (!info || info.count < 3) continue;
+    const bodyChars = cleanExtractedText(p.text).replace(/\s+/g, "").length;
+    if (bodyChars - info.headingChars < LIST_PAGE_MAX_BODY_CHARS) out.add(p.page);
+  }
+  return out;
 }
 
 /** Sarlavhalarni filtrlab, mavzular chegarasini aniqlaydi */
@@ -304,7 +368,7 @@ export function segmentBook(bookPages: BookPage[], bookTitle = ""): { topics: Ra
     const tocPages = findTocPages(pages);
     const offset = calibrateTocOffset(toc, pages, tocPages);
     const topics = topicsFromToc(toc, offset, pages, pagesCount, tocPages);
-    if (topics.length >= 3) {
+    if (topics.length >= (pagesCount <= 8 && totalChars < 9000 ? 2 : 3)) {
       notes.push(
         `Mundarija topildi: ${toc.length} ta yozuv${offset ? `, sahifa siljishi ${offset > 0 ? "+" : ""}${offset}` : ""}.`
       );
@@ -323,10 +387,26 @@ export function segmentBook(bookPages: BookPage[], bookTitle = ""): { topics: Ra
   }
 
   // --- 2) Sarlavhalar ---
-  const headings = selectHeadings(findHeadings(pages), pagesCount);
-  if (headings.length >= 3) {
-    const topics = topicsFromHeadings(headings, pages, pagesCount);
-    if (topics.length >= 3) {
+  // Kichik kitoblar (2–3 bo'limli lug'atlar) uchun 2 ta sarlavha ham yetarli;
+  // katta darsliklarda avvalgidek kamida 3 ta talab qilinadi.
+  const smallBook = pagesCount <= 8 && totalChars < 9000;
+  const MIN_TOPICS = smallBook ? 2 : 3;
+  if (smallBook) notes.push("Kitob kichik — kamida 2 ta bo'lim ham mavzu deb olinadi.");
+
+  const allHits = findHeadings(pages);
+  const listPages = findListPages(pages, allHits);
+  if (listPages.size) {
+    notes.push(
+      `${listPages.size} ta bet mundarija/ro'yxat deb topildi va mavzu sifatida olinmadi (${[...listPages].join(", ")}-betlar).`
+    );
+  }
+  const headings = selectHeadings(
+    allHits.filter((h) => !listPages.has(h.page)),
+    pagesCount
+  );
+  if (headings.length >= MIN_TOPICS) {
+    const topics = topicsFromHeadings(headings, pages, pagesCount, listPages);
+    if (topics.length >= MIN_TOPICS) {
       notes.push(`Mundarija topilmadi — matn ichidagi ${headings.length} ta sarlavha asosida bo'lindi.`);
       return {
         topics,
@@ -404,8 +484,10 @@ function splitOversizedTopics(topics: RawTopic[], pages: BookPage[], tocPages?: 
       continue;
     }
     const inner = pages.filter((p) => p.page >= t.pageStart && p.page <= t.pageEnd);
-    const headings = selectHeadings(findHeadings(inner), inner.length).filter(
-      (h) => h.page > t.pageStart && !(tocPages?.has(h.page) ?? false)
+    const innerHits = findHeadings(inner);
+    const innerListPages = findListPages(inner, innerHits);
+    const headings = selectHeadings(innerHits, inner.length).filter(
+      (h) => h.page > t.pageStart && !(tocPages?.has(h.page) ?? false) && !innerListPages.has(h.page)
     );
     if (headings.length < 2) {
       out.push(t);
@@ -438,15 +520,31 @@ function splitOversizedTopics(topics: RawTopic[], pages: BookPage[], tocPages?: 
 
 // ----------------------------- Sarlavha bo'yicha ----------------------------
 
-function topicsFromHeadings(headings: HeadingHit[], pages: BookPage[], pagesCount: number): RawTopic[] {
+function topicsFromHeadings(
+  headings: HeadingHit[],
+  pages: BookPage[],
+  pagesCount: number,
+  listPages?: Set<number>
+): RawTopic[] {
+  // Ketma-ket takrorlangan bir xil sarlavha — bitta bo'limning davomi
+  // (jadval lug'atlarda bo'lim nomi har betning tepasida takrorlanadi).
+  // Birlashtirmasak, 2 bo'limli kitob 3–4 ta "mavzu"ga bo'linib ketardi.
+  const merged: HeadingHit[] = [];
+  for (const h of headings) {
+    const prev = merged[merged.length - 1];
+    if (prev && foldWord(prev.title) === foldWord(h.title)) continue;
+    merged.push(h);
+  }
+
   const out: RawTopic[] = [];
   const lastPage = pagesCount || Math.max(...pages.map((p) => p.page));
-  for (let i = 0; i < headings.length; i++) {
-    const h = headings[i];
-    const next = i + 1 < headings.length ? headings[i + 1].page : lastPage + 1;
+  for (let i = 0; i < merged.length; i++) {
+    const h = merged[i];
+    const next = i + 1 < merged.length ? merged[i + 1].page : lastPage + 1;
     const end = Math.max(h.page, Math.min(lastPage, next - 1));
     const text = pages
-      .filter((p) => p.page >= h.page && p.page <= end)
+      // mundarija/ro'yxat betlari mavzu matniga qo'shilmaydi
+      .filter((p) => p.page >= h.page && p.page <= end && !(listPages?.has(p.page) ?? false))
       .map((p) => p.text)
       .join("\n")
       .trim();

@@ -110,9 +110,21 @@ function itemsToLines(items: PdfTextItem[]): string {
     rowItems.sort((a, b) => (a.transform?.[0] ?? 0) - (b.transform?.[0] ?? 0));
     let line = "";
     let lastEnd = -1;
+    let lastH = 12;
     for (const it of rowItems) {
       const x = it.transform?.[4] ?? 0;
-      const h = it.height || 10;
+      const h = it.height || lastH; // bo'shliq elementlarida height = 0 bo'ladi
+      // pdf.js ustunlar orasidagi katta bo'shliqni ALOHIDA bo'sh element qilib
+      // beradi (eni 200pt bo'shliq). Uni bitta bo'shliqqa yig'ib yuborsak,
+      // mundarijadagi "...." ham, jadval lug'atlardagi "so'z   tarjima" ham
+      // yo'qoladi. Shuning uchun katta bo'shliq ikki bo'shliq bo'lib qoladi.
+      if (it.str.trim() === "") {
+        const span = it.width ?? 0;
+        if (span > h * 1.6) line = line.replace(/\s+$/, "") + "  ";
+        else if (!line.endsWith(" ")) line += " ";
+        lastEnd = x + span;
+        continue;
+      }
       if (lastEnd >= 0) {
         const gap = x - lastEnd;
         if (gap > h * 1.6) line += "  "; // katta bo'shliq (mundarijadagi "...." o'rnida)
@@ -120,6 +132,7 @@ function itemsToLines(items: PdfTextItem[]): string {
       }
       line += it.str;
       lastEnd = x + (it.width ?? it.str.length * h * 0.5);
+      lastH = h;
     }
     const trimmed = line.trim();
     if (trimmed) lines.push(trimmed);

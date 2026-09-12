@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { MobileNav, Sidebar } from "@/components/Sidebar";
+import { DbAlert } from "@/components/DbAlert";
 import { dataMode } from "@/lib/repo";
 
 export const metadata: Metadata = {
@@ -13,6 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="uz">
       <body>
+        <DbAlert />
         <div className="flex min-h-screen flex-col md:flex-row">
           <MobileNav />
           <Sidebar mode={dataMode} />
