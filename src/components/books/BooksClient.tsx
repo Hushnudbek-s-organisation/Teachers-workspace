@@ -33,7 +33,6 @@ import {
   DEFAULT_GRADE,
   DEFAULT_SUBJECT,
   GRADES,
-  GRADES as GRADE_OPTIONS,
   TEXT_PAGE_CHARS,
   UPLOAD_BATCH_PAGES,
   normalizeGrade,
@@ -68,6 +67,7 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
   const [uploadGrade, setUploadGrade] = useState(DEFAULT_GRADE);
   const [pasteText, setPasteText] = useState("");
   const [pasting, setPasting] = useState(false);
+  const [pasteError, setPasteError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(
@@ -116,6 +116,7 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
       try {
         let pages: { page: number; text: string }[] = [];
         let kind: "pdf" | "matn" = "pdf";
+        let title = job.title;
 
         if (/\.pdf$/i.test(file.name)) {
           updateJob(job.id, { status: "reading", progress: "PDF o'qilmoqda…", percent: 2 });
@@ -128,8 +129,9 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
           });
           pages = result.pages.filter((p) => p.text.trim().length > 0);
           if (!pages.length) throw new Error("PDF'dan matn topilmadi (skanerlangan rasm bo'lishi mumkin).");
-          if (result.title && result.title.length > 3 && job.title.length < 6) {
-            updateJob(job.id, { title: result.title });
+          if (result.title && result.title.length > 3 && title.length < 6) {
+            title = result.title;
+            updateJob(job.id, { title });
           }
         } else {
           kind = "matn";
@@ -143,7 +145,7 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
 
         updateJob(job.id, { status: "uploading", progress: "Serverga yuborilmoqda…", percent: 58 });
         const { uploadId } = await actionStartUpload({
-          title: job.title,
+          title,
           grade: job.grade,
           subject: job.subject,
           fileName: job.fileName,
@@ -182,7 +184,11 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
   };
 
   const createFromText = async () => {
-    if (pasteText.trim().length < 200) return;
+    setPasteError(null);
+    if (pasteText.trim().length < 200) {
+      setPasteError("Matn juda qisqa — kamida 200 ta belgi kiriting (shunda mavzular va o'yinlar yasaladi).");
+      return;
+    }
     setPasting(true);
     try {
       const res = await actionCreateFromText({
@@ -195,6 +201,8 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
       setPasteTitle("");
       setShowPaste(false);
       router.push(`/books/${res.bookId}`);
+    } catch (e) {
+      setPasteError(e instanceof Error ? e.message : "Kitob yasashda xato yuz berdi.");
     } finally {
       setPasting(false);
     }
@@ -237,7 +245,7 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
                 onChange={(e) => setUploadGrade(normalizeGrade(e.target.value))}
                 className="w-28 py-1.5"
               >
-                {GRADE_OPTIONS.map((g) => (
+                {GRADES.map((g) => (
                   <option key={g} value={g}>
                     {g}-sinf
                   </option>
@@ -279,7 +287,12 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
               accept=".pdf,.txt,.md"
               multiple
               className="hidden"
-              onChange={(e) => e.target.files && addFiles(e.target.files)}
+              onChange={(e) => {
+                const files = e.target.files;
+                if (files?.length) addFiles(files);
+                // Bir xil faylni qayta tanlash ham ishlashi uchun tozalaymiz
+                e.target.value = "";
+              }}
             />
           </div>
 
@@ -313,7 +326,7 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
                 </Field>
                 <Field label="Sinf">
                   <Select value={pasteGrade} onChange={(e) => setPasteGrade(normalizeGrade(e.target.value))}>
-                    {GRADE_OPTIONS.map((g) => (
+                    {GRADES.map((g) => (
                       <option key={g} value={g}>
                         {g}-sinf
                       </option>
@@ -329,10 +342,18 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
                   placeholder={"1-MAVZU. Sonlarni qo'shish\nMisol: 24 + 38 = 62\nQoida: ..."}
                 />
               </Field>
-              <Button onClick={createFromText} disabled={pasting || pasteText.trim().length < 200}>
-                {pasting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                Matndan kitob yasash
-              </Button>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button onClick={createFromText} disabled={pasting || pasteText.trim().length < 200}>
+                  {pasting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                  Matndan kitob yasash
+                </Button>
+                <span className="text-xs text-slate-400">
+                  {pasteText.trim().length < 200
+                    ? `${pasteText.trim().length}/200 belgi — kamida 200 belgi kerak`
+                    : `${pasteText.trim().length} belgi tayyor`}
+                </span>
+              </div>
+              {pasteError ? <p className="text-xs text-red-600">{pasteError}</p> : null}
             </div>
           ) : null}
 

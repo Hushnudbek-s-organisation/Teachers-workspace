@@ -450,7 +450,7 @@ export function formatSample(type: GameType): string {
     case "bingo":
       return "olma\nuzum\nanor\nnok\nbehi\nshaftoli\nanjir\nolcha\nxurmo";
     case "findmistake":
-      return "kitob | kitab | ktob | kitobp";
+      return "kitob | kitab | ktob | kitobp\nmaktab | maktap | mktab";
     default:
       return "Poytaxti qaysi shahar? | Toshkent | Samarqand | Buxoro | Namangan\n2 + 2 nechaga teng? | 4 | 3 | 5 | 6";
   }
@@ -491,6 +491,8 @@ function itemsToRaw(items: GameItem[], type: GameType): string {
       if ("text" in it) return String((it as { text: string }).text);
       const q = it as { question: string; options: string[]; answer: number };
       const [correct, ...rest] = [q.options[q.answer ?? 0], ...q.options.filter((_, i) => i !== (q.answer ?? 0))];
+      // "Xatoni top" o'yinida savol matni yo'q — faqat to'g'ri so'z va xato variantlar
+      if (type === "findmistake") return [correct, ...rest].join(" | ");
       return [q.question, correct, ...rest].join(" | ");
     })
     .join("\n");

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import type { GameType, SubjectKey } from "@/lib/books/types";
+import { GAME_TYPES, type GameType, type SubjectKey } from "@/lib/books/types";
 import { createCustomGame, listCustomGames, normalizeItems, parseCustomItems } from "@/lib/books/custom";
 import { DEFAULT_SUBJECT, MAX_BULK_CUSTOM_GAMES, normalizeGrade } from "@/lib/config";
 
@@ -32,8 +32,13 @@ interface GameInput {
   instructions?: string;
 }
 
+const VALID_TYPES = Object.keys(GAME_TYPES);
+
 async function createFromInput(input: GameInput) {
   const type = (input.type ?? "matching") as GameType;
+  if (!VALID_TYPES.includes(type)) {
+    return { error: `Noma'lum o'yin turi: ${String(input.type)}. Ruxsat etilganlar: ${VALID_TYPES.join(", ")}` };
+  }
   const parsed = input.text ? parseCustomItems(input.text, type) : { items: [], problems: [] };
   const items = normalizeItems(parsed.items, type);
 

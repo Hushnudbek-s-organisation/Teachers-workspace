@@ -508,7 +508,9 @@ function MatchingBoard({ items, onFinish }: { items: MatchingItem[]; onFinish: (
 
   const tryMatch = (leftIndex: number, rightIndex: number, rightText: string) => {
     if (matched.includes(leftIndex) || matched.includes(rightIndex)) return;
-    const correct = items[leftIndex].right === rightText && leftIndex === rightIndex;
+    // Ko'rinib turgan matn bo'yicha tekshiramiz: bir xil javobli kartalar
+    // bo'lsa ham o'quvchi to'g'ri ko'rgan variantni tanlagan bo'ladi
+    const correct = items[leftIndex].right === rightText;
     if (correct) {
       const next = [...matched, leftIndex];
       setMatched(next);
@@ -673,13 +675,15 @@ function MemoryBoard({ items, onFinish }: { items: MatchingItem[]; onFinish: (s:
   };
 
   const allDone = cards.length > 0 && cards.every((c) => c.done);
+  // Qo'shimcha urinishlar ballni kamaytiradi (a'lo o'yin — to'liq ball)
+  const finalScore = Math.max(0, items.length - Math.max(0, tries - items.length));
 
   useEffect(() => {
     if (allDone) {
-      const t = setTimeout(() => onFinish(score, items.length), 700);
+      const t = setTimeout(() => onFinish(finalScore, items.length), 700);
       return () => clearTimeout(t);
     }
-  }, [allDone, onFinish, score, items.length]);
+  }, [allDone, onFinish, finalScore, items.length]);
 
   return (
     <div>

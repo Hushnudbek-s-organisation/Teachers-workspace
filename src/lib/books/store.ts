@@ -242,7 +242,14 @@ interface UploadSession {
   createdAt: number;
 }
 
-const sessions = new Map<string, UploadSession>();
+/**
+ * Yuklash sessiyalari — global ob'ektda saqlanadi.
+ * Sabab: ishlab chiqish rejimida modul qayta yuklansa (HMR), oddiy Map
+ * o'chib ketadi va uzoq yuklash "sessiya topilmadi" xatosi bilan tugaydi.
+ */
+const globalStore = globalThis as unknown as { __bookUploadSessions?: Map<string, UploadSession> };
+const sessions: Map<string, UploadSession> =
+  globalStore.__bookUploadSessions ?? (globalStore.__bookUploadSessions = new Map());
 
 function gcSessions() {
   const now = Date.now();

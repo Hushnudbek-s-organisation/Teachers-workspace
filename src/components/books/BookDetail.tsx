@@ -24,6 +24,7 @@ import {
   SUBJECTS,
   type Book,
   type Game,
+  type SubjectKey,
   type Topic,
 } from "@/lib/books/types";
 import { Badge, Button, Card, EmptyState } from "@/components/ui";
@@ -35,6 +36,7 @@ export interface BookPayload {
   id: string;
   title: string;
   grade: number;
+  subject: SubjectKey;
   subjectLabel: string;
   author?: string;
   stats: Book["stats"];
@@ -61,7 +63,7 @@ export function BookDetail({
   leaderboard: LeaderRow[];
   customGames?: CustomGameCard[];
 }) {
-  const subjectMeta = Object.values(SUBJECTS).find((s) => s.label === book.subjectLabel) ?? SUBJECTS.boshqa;
+  const subjectMeta = SUBJECTS[book.subject] ?? SUBJECTS.boshqa;
   const [open, setOpen] = useState<number | null>(0);
 
   return (

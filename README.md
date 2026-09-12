@@ -311,7 +311,8 @@ missingletter     :   k_tob | kitob
 puzzle            :   kitob | ki,tob
 order             :   Gapni tartibla | Bugun | havo | issiq
 math / pop        :   24 + 38 = 62
-quiz / findmistake:   Poytaxti qaysi shahar? | Toshkent | Samarqand | Buxoro
+quiz              :   Poytaxti qaysi shahar? | Toshkent | Samarqand | Buxoro
+findmistake       :   kitob | kitab | ktob   (birinchi so'z — to'g'ri yozilgani)
 bingo             :   olma   (har bir qator — bitta karta)
 ```
 
@@ -319,6 +320,8 @@ Tizim **o'zi** qolganini qiladi:
 - test savollariga **chalg'ituvchi variantlar** yasaydi (sonlar uchun yaqin sonlar, so'zlar uchun o'xshash variantlar);
 - `k_tob` uchun **4 ta harf varianti** tayyorlaydi;
 - bo'laklar ko'rsatilmagan bo'lsa, so'zni **bo'g'inlarga** bo'ladi;
+- o'qituvchi yozgan variantlarni **saqlab qoladi**, yetmaganini o'zi qo'shadi;
+- javob variantlarini **aralashtiradi** (to'g'ri javob doim birinchi turmaydi);
 - tushunilmagan qatorlarni **ko'rsatib beradi** (o'yinda ishlatilmaydi).
 
 Matn kiritilganda natija **darhol** ko'rinadi (brauzerda tahlil qilinadi, server kutilmaydi).

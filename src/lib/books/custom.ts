@@ -41,6 +41,17 @@ async function writeAll(games: CustomGame[]) {
   await fs.writeFile(FILE, JSON.stringify(games, null, 0), "utf8");
 }
 
+/**
+ * "grouping" o'yinida guruhlar ko'rsatilmagan bo'lsa — elementlarning o'ng
+ * ustunidan chiqaramiz. Aks holda doskada guruh ustunlari bo'lmay qoladi.
+ */
+function withDerivedGroups(type: GameType, items: GameItem[], groups?: string[]): string[] | undefined {
+  if (type !== "grouping") return groups?.length ? groups : undefined;
+  if (groups?.length) return groups;
+  const derived = [...new Set(items.map((it) => String((it as { right?: string }).right ?? "").trim()).filter(Boolean))];
+  return derived.length >= 2 ? derived : undefined;
+}
+
 export async function listCustomGames(bookId?: string): Promise<CustomGame[]> {
   const all = await readAll();
   const filtered = bookId ? all.filter((g) => g.bookId === bookId) : all;
@@ -68,8 +79,10 @@ export interface CustomGameInput {
 }
 
 export async function createCustomGame(input: CustomGameInput): Promise<CustomGame> {
+  if (!GAME_TYPES[input.type]) throw new Error(`Noma'lum o'yin turi: ${String(input.type)}`);
   const items = normalizeItems(input.items.filter(Boolean), input.type).slice(0, MAX_CUSTOM_ITEMS);
-  if (!items.length) throw new Error("O'yin uchun kamida bitta savol/ juftlik kerak.");
+  if (!items.length) throw new Error("O'yin uchun kamida bitta savol yoki juftlik kerak.");
+  const groups = withDerivedGroups(input.type, items, input.groups);
 
   const game: CustomGame = {
     id: `o-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
@@ -78,7 +91,7 @@ export async function createCustomGame(input: CustomGameInput): Promise<CustomGa
     instructions: input.instructions?.trim() || GAME_TYPES[input.type].hint,
     difficulty: input.difficulty ?? 2,
     items,
-    groups: input.groups?.length ? input.groups : undefined,
+    groups,
     builtFrom: { note: input.note?.trim() || "O'qituvchi tomonidan yaratilgan", pages: [] },
     custom: true,
     createdAt: new Date().toISOString(),
@@ -103,18 +116,20 @@ export async function updateCustomGame(
   const i = all.findIndex((g) => g.id === id);
   if (i < 0) return null;
   const prev = all[i];
+  const type = patch.type ?? prev.type;
+  const items = patch.items?.length
+    ? normalizeItems(patch.items.filter(Boolean), type).slice(0, MAX_CUSTOM_ITEMS)
+    : prev.items;
   const next: CustomGame = {
     ...prev,
+    type,
     title: patch.title?.trim() || prev.title,
     instructions: patch.instructions?.trim() || prev.instructions,
     difficulty: patch.difficulty ?? prev.difficulty,
-    groups: patch.groups?.length ? patch.groups : prev.groups,
+    groups: withDerivedGroups(type, items, patch.groups?.length ? patch.groups : prev.groups),
     subject: patch.subject ?? prev.subject,
     grade: patch.grade ?? prev.grade,
-    items:
-      patch.items?.length
-        ? normalizeItems(patch.items.filter(Boolean), patch.type ?? prev.type).slice(0, MAX_CUSTOM_ITEMS)
-        : prev.items,
+    items,
     bookId: patch.bookId ?? prev.bookId,
     topicId: patch.topicId ?? prev.topicId,
     builtFrom: patch.note ? { ...prev.builtFrom, note: patch.note } : prev.builtFrom,

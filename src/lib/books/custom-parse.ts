@@ -5,6 +5,7 @@
 // matnni darhol, serverga yubormasdan ham tekshirib ko'rsatishi mumkin.
 // ============================================================================
 
+import { shuffleSeeded } from "./text";
 import type { GameItem, GameType } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -100,6 +101,10 @@ export function parseCustomItems(raw: string, type: GameType): ParsePreview {
           problems.push(line);
           break;
         }
+        if ((display.match(/_/g) ?? []).length > 1) {
+          problems.push(`${line} — faqat bitta harf yashirilishi kerak (masalan: "k_tob | kitob")`);
+          break;
+        }
         if (!answer) {
           problems.push(`${line} — javob ko'rsatilmagan (ko'rinish: "k_tob | kitob")`);
           break;
@@ -180,8 +185,24 @@ export function parseCustomItems(raw: string, type: GameType): ParsePreview {
         break;
       }
 
+      case "findmistake": {
+        // "to'g'ri so'z | xato1 | xato2 ..." — birinchi qism to'g'ri yozilgan so'z
+        const parts = line.split("|").map((p) => p.trim()).filter(Boolean);
+        if (parts.length < 2) {
+          problems.push(`${line} — ko'rinish: "kitob | kitab | ktob"`);
+          break;
+        }
+        const [correct, ...wrong] = parts;
+        items.push({
+          question: "Qaysi so'z to'g'ri yozilgan?",
+          options: [correct, ...wrong].slice(0, 4),
+          answer: 0,
+        });
+        break;
+      }
+
       default: {
-        // quiz / findmistake: "Savol | to'g'ri | xato1 | xato2 | xato3"
+        // quiz: "Savol | to'g'ri | xato1 | xato2 | xato3"
         const parts = line.split("|").map((p) => p.trim()).filter(Boolean);
         if (parts.length < 2) {
           problems.push(line);
@@ -245,12 +266,24 @@ function rnd(seed: number) {
 /** Variantlari yetmagan elementlarni to'ldiradi va turlar bo'yicha normallashtiradi */
 export function normalizeItems(items: GameItem[], type: GameType, seed = 7): GameItem[] {
   const rand = rnd(seed * 31 + items.length);
+  /**
+   * Variantlarni aralashtirish — HAR BIR element uchun alohida seed bilan.
+   * Bitta umumiy oqim ishlatilsa, bir xil uzunlikdagi variantlar bir xil
+   * tartibda chiqadi va to'g'ri javob doim bir joyda turadi.
+   */
+  const shuffleFor = <T,>(arr: T[], itemIndex: number): T[] =>
+    shuffleSeeded(arr, `${seed}:${type}:${itemIndex}:${arr.length}`);
 
   // Barcha matnli javoblar — chalg'ituvchilar uchun manba
   const allTexts = items
     .map((it) => {
       const anyIt = it as unknown as Record<string, unknown>;
-      return String(anyIt.answer ?? anyIt.right ?? anyIt.text ?? "").trim();
+      // Sonli `answer` — bu indeks (quiz) yoki sonning o'zi (math); variant sifatida yaroqsiz
+      const text =
+        typeof anyIt.answer === "string"
+          ? anyIt.answer
+          : (anyIt.right as string | undefined) ?? (anyIt.text as string | undefined) ?? "";
+      return String(text).trim();
     })
     .filter((x) => x.length > 0 && x.length < 40);
 
@@ -316,7 +349,7 @@ export function normalizeItems(items: GameItem[], type: GameType, seed = 7): Gam
     return out;
   };
 
-  return items.map((it) => {
+  return items.map((it, itemIndex) => {
     switch (type) {
       case "missingletter": {
         const m = it as { display: string; answer: string; options: string[] };
@@ -329,7 +362,7 @@ export function normalizeItems(items: GameItem[], type: GameType, seed = 7): Gam
                 const c = wrong.splice(Math.floor(rand() * wrong.length), 1)[0];
                 if (!picked.includes(c)) picked.push(c);
               }
-              return [m.answer, ...picked].sort(() => rand() - 0.5);
+              return shuffleFor([m.answer, ...picked], itemIndex);
             })();
         return { ...m, options: opts } as GameItem;
       }
@@ -347,14 +380,14 @@ export function normalizeItems(items: GameItem[], type: GameType, seed = 7): Gam
           const cand = a + d * (a > 200 ? 10 : a > 50 ? 5 : 1);
           if (cand !== a && cand >= 0) opts.add(Math.round(cand));
         }
-        const options = [...opts].sort(() => rand() - 0.5);
+        const options = shuffleFor([...opts], itemIndex);
         return { ...m, options } as GameItem;
       }
 
       case "fill": {
         const f = it as { sentence: string; answer: string; options: string[] };
         if (Array.isArray(f.options) && f.options.length >= 4) return it;
-        const options = [f.answer, ...pickDistractors(f.answer, 3)].sort(() => rand() - 0.5);
+        const options = shuffleFor([f.answer, ...pickDistractors(f.answer, 3)], itemIndex);
         return { ...f, options } as GameItem;
       }
 
@@ -368,11 +401,30 @@ export function normalizeItems(items: GameItem[], type: GameType, seed = 7): Gam
       case "quiz":
       case "findmistake": {
         const q = it as { question: string; options: string[]; answer: number };
-        if (!Array.isArray(q.options)) return it;
+        if (!Array.isArray(q.options) || !q.options.length) return it;
         const correct = q.options[q.answer ?? 0];
-        if (q.options.length >= 4 || !correct) return it;
-        const options = [correct, ...pickDistractors(correct, 4 - q.options.length)];
-        return { ...q, options, answer: 0 } as GameItem;
+        if (!correct) return it;
+        // O'qituvchi kiritgan variantlarni saqlab qolamiz, faqat takrorlarni olib tashlaymiz
+        const seen = new Set([correct.trim().toLowerCase()]);
+        const pool: string[] = [correct];
+        for (const raw of q.options) {
+          const v = String(raw).trim();
+          if (v && !seen.has(v.toLowerCase())) {
+            seen.add(v.toLowerCase());
+            pool.push(v);
+          }
+        }
+        if (pool.length < 4) {
+          for (const d of pickDistractors(correct, 4 - pool.length)) {
+            if (!seen.has(d.toLowerCase())) {
+              seen.add(d.toLowerCase());
+              pool.push(d);
+            }
+          }
+        }
+        // To'g'ri javob doim birinchi turmasligi kerak — variantlarni aralashtiramiz
+        const options = shuffleFor(pool.slice(0, 4), itemIndex);
+        return { ...q, options, answer: options.indexOf(correct) } as GameItem;
       }
 
       default:

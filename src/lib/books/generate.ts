@@ -130,6 +130,9 @@ export function analyzeTopic(
       games = genericGames(ctx);
   }
 
+  // Bitta mavzudagi o'yinlar soni chegaradan oshmasin
+  games = games.slice(0, MAX_GAMES_PER_TOPIC);
+
   // Har qanday fanga foydali qo'shimchalar
   if (games.length < MAX_GAMES_PER_TOPIC) {
     const bingo = buildBingoGame(ctx);
@@ -182,7 +185,14 @@ function makeGame(
   note = ""
 ): Game | null {
   const min = type === "memory" ? 4 : 3;
-  const clean = items.filter(Boolean);
+  // Takrorlanuvchi elementlarni (bir xil savol/juftlik) olib tashlaymiz
+  const seen = new Set<string>();
+  const clean = items.filter(Boolean).filter((it) => {
+    const key = JSON.stringify(it);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   if (clean.length < min) return null;
   const limit = MAX_ITEMS[type] ?? DEFAULT_MAX_ITEMS;
   const pages = uniq(ctx.pages.map((p) => p.page)).slice(0, 6);
@@ -375,9 +385,12 @@ function solveWordProblems(ctx: Ctx): Array<{ question: string; options: string[
     .map((t) => t.text)
     .concat(unitsOf(ctx.raw.text).filter((s) => s.endsWith("?") && /\d/.test(s)));
 
+  const seenProblems = new Set<string>();
   for (const p of problems) {
     if (p.length > MAX_WORD_PROBLEM_CHARS || p.length < 12) continue;
     if (!p.includes("?")) continue;
+    if (seenProblems.has(p.replace(/\s+/g, " ").trim())) continue;
+    seenProblems.add(p.replace(/\s+/g, " ").trim());
 
     const clean = p.replace(/^\s*\d{1,3}[.)]\s*/, "").replace(/\s+/g, " ").trim();
     const nums = (clean.match(/\d{1,3}(?:[ \u00A0]?\d{3})*(?:,\d+)?/g) ?? [])

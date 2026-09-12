@@ -19,6 +19,7 @@ export default async function BookPage({ params }: { params: Promise<{ id: strin
     id: book.id,
     title: book.title,
     grade: book.grade,
+    subject: book.subject,
     subjectLabel: book.subjectLabel,
     author: book.author,
     stats: book.stats,

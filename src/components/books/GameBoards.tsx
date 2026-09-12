@@ -229,7 +229,7 @@ export function PuzzleBoard({ items, onFinish }: BoardProps & { items: PuzzleIte
         )}
       </div>
 
-      {item.pieces.length > 1 ? (
+      {item.pieces.length >= 1 ? (
         <div className="mb-4 flex flex-wrap justify-center gap-2">
           {available.map((p, i) => (
             <button
@@ -369,6 +369,12 @@ export function GroupingBoard({
   const [checked, setChecked] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
 
+  // Guruhlar berilmagan bo'lsa — elementlarning o'zidan chiqaramiz (doska bo'sh qolmasin)
+  const groupList = useMemo(
+    () => (groups.length ? groups : [...new Set(items.map((it) => it.right).filter(Boolean))]),
+    [groups, items]
+  );
+
   const tray = items.map((it) => it.left).filter((word) => !(word in placed));
 
   const put = (word: string, group: string) => {
@@ -429,8 +435,8 @@ export function GroupingBoard({
       </div>
 
       {/* Guruhlar */}
-      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(groups.length, 3)}, minmax(0, 1fr))` }}>
-        {groups.map((group) => {
+      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(Math.max(groupList.length, 1), 3)}, minmax(0, 1fr))` }}>
+        {groupList.map((group) => {
           const groupWords = Object.entries(placed)
             .filter(([, g]) => g === group)
             .map(([w]) => w);

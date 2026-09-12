@@ -12,6 +12,7 @@
     "start": "next start",
     "lint": "next lint",
     "test:books": "tsx scripts/test-book-engine.mts",
+    "test:games": "tsx scripts/test-game-builder.mts",
     "ingest": "node scripts/ingest-pdf.mjs"
   },
   "dependencies": {
