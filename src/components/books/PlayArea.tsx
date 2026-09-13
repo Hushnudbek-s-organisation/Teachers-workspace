@@ -38,14 +38,21 @@ import {
   PuzzleBoard,
   textsFromItems,
 } from "./GameBoards";
-import { Progress, shuffleStable, useBoardProgress, type BoardProps } from "./board-utils";
+import { Progress, shuffleRandom, shuffleStable, useBoardProgress, type BoardProps } from "./board-utils";
 
 export interface PlayAreaProps extends BoardProps {
   game: Game;
 }
 
+/** Har safar o'yin boshlanganda savollarni tasodifiy aralashtirish */
+function useShuffledGame(original: Game): Game {
+  const shuffledItems = useMemo(() => shuffleRandom(original.items), [original.items]);
+  return useMemo(() => ({ ...original, items: shuffledItems }), [original, shuffledItems]);
+}
+
 /** O'yin turiga mos taxtani tanlaydi */
-export function PlayArea({ game, onFinish, onProgress, compact }: PlayAreaProps) {
+export function PlayArea({ game: originalGame, onFinish, onProgress, compact }: PlayAreaProps) {
+  const game = useShuffledGame(originalGame);
   switch (game.type) {
     case "matching":
       return (
@@ -128,7 +135,16 @@ function QuestionBoard({
   const [revealed, setRevealed] = useState(false);
 
   const item = items[index];
-  const view = useMemo(() => itemView(item), [item]);
+  const baseView = useMemo(() => itemView(item), [item]);
+  // Variantlarni ham har safar aralashtirish — o'quvchi joyini yodlab qolmasin
+  const view = useMemo(() => {
+    if (!baseView.options.length) return baseView;
+    const correctVal = baseView.options[baseView.correctIndex];
+    if (correctVal == null) return baseView;
+    const shuffled = shuffleRandom(baseView.options);
+    const newIdx = shuffled.indexOf(correctVal);
+    return { ...baseView, options: shuffled, correctIndex: newIdx >= 0 ? newIdx : baseView.correctIndex };
+  }, [baseView]);
 
   useEffect(() => {
     setSelected(null);
@@ -297,8 +313,8 @@ function MatchingBoard({
   onProgress,
   compact,
 }: BoardProps & { items: MatchingItem[] }) {
-  const leftCards = useMemo(() => shuffleStable(items.map((it, i) => ({ i, text: it.left })), 5), [items]);
-  const rightCards = useMemo(() => shuffleStable(items.map((it, i) => ({ i, text: it.right })), 11), [items]);
+  const leftCards = useMemo(() => shuffleRandom(items.map((it, i) => ({ i, text: it.left }))), [items]);
+  const rightCards = useMemo(() => shuffleRandom(items.map((it, i) => ({ i, text: it.right }))), [items]);
 
   const [matched, setMatched] = useState<number[]>([]);
   const [leftSel, setLeftSel] = useState<number | null>(null);
@@ -460,7 +476,7 @@ function MemoryBoard({
       cards.push({ id: i * 2, text: p.left, pairId: i, flipped: false, done: false });
       cards.push({ id: i * 2 + 1, text: p.right, pairId: i, flipped: false, done: false });
     });
-    return shuffleStable(cards, items.length);
+    return shuffleRandom(cards);
   }, [items]);
 
   const [cards, setCards] = useState<MemoryCard[]>(deck);
@@ -556,7 +572,7 @@ function OrderBoard({
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
   const item = items[index];
-  const shuffled = useMemo(() => (item ? shuffleStable(item.tokens, index * 13 + 3) : []), [item, index]);
+  const shuffled = useMemo(() => (item ? shuffleRandom(item.tokens) : []), [item, index]);
   const [picked, setPicked] = useState<string[]>([]);
   const [checked, setChecked] = useState<boolean | null>(null);
 

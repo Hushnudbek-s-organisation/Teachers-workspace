@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button, Card, Field, Input, Select } from "@/components/ui";
-import { shuffleStable } from "@/components/books/board-utils";
+import { shuffleRandom, shuffleStable } from "@/components/books/board-utils";
 
 import type { QuizQuestion } from "@/lib/books/quiz-pool";
 export type { QuizQuestion };
@@ -59,7 +59,7 @@ export function TeamQuiz({
 
   // Savollar tartibi
   useEffect(() => {
-    setOrder(shuffleStable(pool.map((_, i) => i), 13));
+    setOrder(shuffleRandom(pool.map((_, i) => i)));
     setIndex(0);
     setRevealed(false);
     setPicked(null);
@@ -98,7 +98,7 @@ export function TeamQuiz({
   };
 
   const restart = () => {
-    setOrder(shuffleStable(pool.map((_, i) => i), Date.now() % 9999));
+    setOrder(shuffleRandom(pool.map((_, i) => i)));
     setIndex(0);
     setRevealed(false);
     setPicked(null);
