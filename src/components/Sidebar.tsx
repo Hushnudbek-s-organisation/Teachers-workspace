@@ -7,6 +7,7 @@ import {
   BookOpen,
   CalendarDays,
   Presentation,
+  Trophy,
   Wand2,
   ClipboardCheck,
   GraduationCap,
@@ -27,12 +28,25 @@ const NAV = [
   { href: "/daily", label: "Kunlik davomat", icon: ClipboardCheck },
   { href: "/books", label: "Kitoblar & O'yinlar", icon: BookOpen },
   { href: "/games", label: "O'yin yasash", icon: Wand2 },
+  { href: "/games/stats", label: "O'yin statistikasi", icon: Trophy },
   { href: "/classroom", label: "Sinf bilan o'ynash", icon: Presentation },
   { href: "/analytics", label: "Tahlil", icon: BarChart3 },
 ];
 
+/**
+ * Faol bo'limni aniqlash: bir nechta havola mos kelsa (masalan /games va
+ * /games/stats) eng uzuni tanlanadi — aks holda ikkalasi ham yonib turardi.
+ */
+function activeHref(pathname: string): string | null {
+  const matches = NAV.map((n) => n.href).filter((href) =>
+    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`)
+  );
+  return matches.sort((a, b) => b.length - a.length)[0] ?? null;
+}
+
 function NavLinks({ orientation }: { orientation: "vertical" | "horizontal" }) {
   const pathname = usePathname();
+  const current = activeHref(pathname);
   return (
     <nav
       className={cn(
@@ -40,7 +54,7 @@ function NavLinks({ orientation }: { orientation: "vertical" | "horizontal" }) {
       )}
     >
       {NAV.map(({ href, label, icon: Icon }) => {
-        const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+        const active = href === current;
         return (
           <Link
             key={href}

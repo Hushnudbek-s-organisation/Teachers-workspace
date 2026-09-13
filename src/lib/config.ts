@@ -101,6 +101,44 @@ export const QUIZ_SECONDS_PER_QUESTION = 30;
 /** Matnli masalani yechish uchun eng katta hajm (belgi) */
 export const MAX_WORD_PROBLEM_CHARS = 300;
 
+// --------------------- Bir qurilmada birga o'ynash (1/2/3) ------------------
+
+/** Bir qurilmada bir vaqtda o'ynay oladigan eng ko'p o'yinchi */
+export const MULTIPLAYER_MAX_PLAYERS = 3;
+
+/** "Savollar soni" rejimida taklif qilinadigan standart savollar soni */
+export const MULTIPLAYER_DEFAULT_QUESTIONS = 10;
+
+/** Sozlamada kiritish mumkin bo'lgan eng katta savollar soni */
+export const MULTIPLAYER_MAX_QUESTIONS = 40;
+
+/** Taxta o'yinlarida (matching/memory/grouping/bingo) standart raundlar soni */
+export const MULTIPLAYER_DEFAULT_ROUNDS = 1;
+
+/** "Vaqt bo'yicha" rejimida taklif qilinadigan minutlar */
+export const MULTIPLAYER_MINUTE_OPTIONS = [1, 2, 3, 5, 10];
+
+/** "Vaqt bo'yicha" rejimining standart davomiyligi (minut) */
+export const MULTIPLAYER_DEFAULT_MINUTES = 2;
+
+/** "Vaqt bo'yicha" rejimida bir raundda beriladigan savollar soni */
+export const MULTIPLAYER_TIMED_ROUND_ITEMS = 8;
+
+/**
+ * Taxta o'yinini o'yinchilar o'rtasida BO'LISH uchun har biriga kerak bo'lgan
+ * eng kam element. Yetarli bo'lmasa hammaga bir xil to'plam (lekin har xil
+ * tartibda) beriladi — o'yin juda mayda bo'lib qolmasligi uchun.
+ */
+export const MULTIPLAYER_MIN_BOARD_ITEMS: Record<string, number> = {
+  matching: 4,
+  memory: 4,
+  grouping: 6,
+  bingo: 9,
+};
+
+/** Bo'lingan taxtada qoladigan eng kam element (kichik to'plamlar uchun) */
+export const MULTIPLAYER_MIN_BOARD_ITEMS_FALLBACK = 3;
+
 // ------------------------------ O'qituvchi muharriri ------------------------
 
 /** Bitta o'yinda ko'pi bilan shuncha element */

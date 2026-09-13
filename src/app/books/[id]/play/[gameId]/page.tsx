@@ -38,6 +38,7 @@ export default async function PlayPage({
         topicId={topic.id}
         topicTitle={topic.title}
         students={students}
+        saveBookId={book.id}
       />
 
       {otherGames.length ? (

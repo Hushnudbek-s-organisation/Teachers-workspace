@@ -12,6 +12,8 @@ Teacher & Admin Dashboard for a school management platform:
 | **`src/lib/books/*` + `src/app/books/*`** | **Kitob → O'yin** — o'qituvchi yuklagan darslikni (PDF/matn) o'qib mavzularga bo'ladi va har bir mavzudan o'yinlar yasaydi (sinf va fan o'qituvchi tanlaydi) |
 | **`src/lib/books/custom*` + `src/app/games/*`** | **O'qituvchi o'yin yasash** — 13 xil o'yin turi, o'z so'zlari/misollari bilan (matn yoki jadval orqali) |
 | **`src/app/classroom`** | **Sinf bilan o'ynash** — 🎡 charxpalak, 🏆 guruhlar viktorinasi (Kahoot uslubida), 🎟 bingo kartalari (chop etish) |
+| **`src/lib/books/multiplayer.ts` + `src/components/books/Multiplayer*`** | **Bir qurilmada 1/2/3 kishi o'ynash** — bo'lingan ekran (portrait/landscape), har o'yinchiga har xil savol, «savollar soni» yoki «vaqt bo'yicha» rejim |
+| **`src/app/games/stats`** | **O'yinlar statistikasi** — saqlangan natijalar: o'yinchilar, o'yinlar va turlar kesimida, oxirgi natijalar (filtr bilan) |
 
 ---
 
@@ -334,6 +336,49 @@ Har bir tur **kitobdan avtomatik** ham, **o'qituvchi qo'li bilan** ham yasalishi
 
 ---
 
+# 👥 Bir qurilmada 1 / 2 / 3 kishi o'ynash
+
+Har qanday o'yin ochilganda (kitob o'yini `/books/[id]/play/[gameId]` yoki o'qituvchi
+o'yini `/games/[id]`) avval **«Nech kishi o'ynaydi?»** so'raladi: **1** (standart), **2** yoki **3**.
+
+| Nima | Qanday ishlaydi |
+| --- | --- |
+| **1 kishi** | Avvalgi oqim o'zgarmagan: butun ekran, bitta hisob, natijani o'quvchiga saqlash |
+| **2–3 kishi** | Ekran bo'linadi — har o'yinchining **o'z maydoni, o'z holati va o'z hisobi**; ismi yoziladi yoki o'quvchilar ro'yxatidan tanlanadi (standart: «1-o'yinchi», «2-o'yinchi», «3-o'yinchi») |
+| **Birga boshlash** | Hamma **bir vaqtda** boshlaydi va bir vaqtda o'ynaydi: kim o'z savolini bitirdi — keyingisiga o'tadi, boshqalar o'zinikini davom ettiradi |
+| **Har xil savol** | Bir xil misol ikki o'yinchiga tushmaydi — to'plam o'yinchilar orasida adolatli bo'linadi (har birida elementlar soni teng). To'plam kichik bo'lsa har kimga bir xil to'plam **har xil tartibda** beriladi, bingo'da har kimda **o'z kartasi** |
+| **🔢 Savollar soni** | Har o'yinchiga nechta savol (taxta o'yinlarida — nechta taxta) berilishi kirishda sozlanadi. Yakunlanishi: **birinchi tugatgan** (poyga) yoki **hammasi tugatguncha** |
+| **⏱ Vaqt bo'yicha** | Minut tanlanadi (1 / 2 / 3 / 5 / 10) — vaqt tugaguncha savollar ketma-ket kelib turadi, oxirida kim nechta ishlagani chiqadi |
+| **Joylashuv** | Telefonda (**portrait**) maydonlar ustma-ust, keng ekranda (**landscape**) yonma-yon — `tailwind.config.ts`ga qo'shilgan `orientation` media query, ekran aylanganda o'zi qayta quriladi |
+| **Avto-moslashuv** | Taxtalar o'z konteyneriga kichrayib sig'adi (`FitBox`), ichki scroll/overflow bo'lmaydi, sensorli (touch) boshqaruv har maydonda ishlaydi |
+| **Faol o'yinchi** | Maydon romi va yorlig'i rang bilan ajratiladi (🦊 indigo / 🐼 yashil / 🦁 sariq), oxirgi harakat qilgan o'yinchi «Faol» deb belgilanadi |
+| **Natija** | Hisoblar yonma-yon (telefonda ustma-ust), **«G'olib: X 🏆»** yoki **«Durrang!»**, har birida ball / bajarilgan savollar / foiz / yulduz / vaqt |
+| **Saqlash** | Har o'yinchining natijasi `game_results`ga **alohida yozuv** bo'lib tushadi: o'quvchi tanlangan bo'lsa `student_id` bilan, tanlanmagan bo'lsa kiritilgan ism bilan |
+
+> **Texnik:** rejim tanlash `GamePlayer` darajasida umumiy — taxta komponentlari
+> duplikatlanmagan. Bitta `<PlayArea>` har maydonda o'z `items` / `compact` /
+> `onProgress` props'lari bilan render bo'ladi. Sof mantiq (tarqatish, raundlar,
+> o'rinlar) `src/lib/books/multiplayer.ts`da, hisobot `src/lib/books/game-stats.ts`da —
+> ikkalasi ham `npm run test:games` bilan tekshiriladi. `/classroom` vositalari
+> (charxpalak, guruhlar viktorinasi, bingo generatori) sinf uchun — bu rejim ularga tegishli emas.
+
+---
+
+# 📈 O'yinlar statistikasi (`/games/stats`)
+
+Barcha saqlangan natijalar bir joyda (yon panel: **«O'yin statistikasi»**):
+
+- **umumiy**: jami o'ynashlar, o'rtacha natija, o'yinchilar soni, ko'p kishilik yozuvlar;
+- **eng yaxshi o'yinchilar** — foiz va o'yinlar soni bo'yicha;
+- **o'yinlar kesimida** — nechta o'ynalgan, nechta o'yinchi, o'rtacha va eng yaxshi natija, oxirgi o'yin;
+- **o'yin turlari kesimida** — har tur uchun o'ynashlar va o'rtacha foiz;
+- **oxirgi natijalar** — ism/o'yin bo'yicha qidiruv va tur filtri bilan.
+
+2–3 kishilik o'yinda har o'yinchi alohida qator bo'lib tushadi. O'quvchi tanlanmagan
+bo'lsa, yozuv kiritilgan ism bilan saqlanadi va «(ism bilan)» belgisi qo'yiladi.
+
+---
+
 # 🎡 Sinf bilan o'ynash (`/classroom`)
 
 | Format | Tavsif |
@@ -385,7 +430,7 @@ qiyinlikni tanlash. Ikkala usulni almashtirib ishlatsa bo'ladi.
 ### Boshqa imkoniyatlar
 - O'yinni **kitob va mavzuga bog'lash** — u holda kitob sahifasida ham ko'rinadi.
 - Har bir o'yinni **tahrirlash**, **o'chirish**, **havolasini ulashish** (o'quvchilarga yuborish).
-- Natijalar o'quvchi ismiga saqlanadi va **leaderboard**ga tushadi.
+- Natijalar o'quvchi ismiga saqlanadi, **leaderboard**ga va **`/games/stats`** sahifasiga tushadi.
 
 ### API orqali (bir nechta o'yinni birdan)
 
