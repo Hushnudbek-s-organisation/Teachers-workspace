@@ -41,11 +41,23 @@ function Row({ game }: { game: CustomGameRow }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const subject = SUBJECTS[game.subject] ?? SUBJECTS.boshqa;
 
   const remove = async () => {
-    await actionDeleteCustomGame(game.id);
-    router.refresh();
+    setError(null);
+    try {
+      const res = await actionDeleteCustomGame(game.id);
+      if (res && res.ok === false) {
+        setError(res.error + (res.hint ? " " + res.hint : ""));
+        setConfirming(false);
+        return;
+      }
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "O'chirishda xatolik");
+      setConfirming(false);
+    }
   };
 
   const copy = async () => {
@@ -89,6 +101,8 @@ function Row({ game }: { game: CustomGameRow }) {
           {game.emoji} {game.typeLabel}
         </Badge>
       </div>
+
+      {error ? <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p> : null}
 
       <div className="mt-auto flex items-center gap-1.5 pt-3">
         <Link href={`/games/${game.id}`} className="flex-1">

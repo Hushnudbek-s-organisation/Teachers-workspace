@@ -41,7 +41,11 @@ function StudentForm({ student, onDone }: { student?: Student; onDone: () => voi
     setError(null);
     startTransition(async () => {
       try {
-        await saveStudent(fd);
+        const res = await saveStudent(fd);
+        if (res && res.ok === false) {
+          setError(res.error + (res.hint ? " " + res.hint : ""));
+          return;
+        }
         onDone();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Saqlashda xatolik yuz berdi");
@@ -103,7 +107,11 @@ export function StudentsClient({
     setError(null);
     startTransition(async () => {
       try {
-        await deleteStudent(deleting.id);
+        const res = await deleteStudent(deleting.id);
+        if (res && res.ok === false) {
+          setError(res.error + (res.hint ? " " + res.hint : ""));
+          return;
+        }
         setDeleting(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "O'chirishda xatolik");

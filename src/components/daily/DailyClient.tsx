@@ -119,7 +119,10 @@ export function DailyClient({
     setError(null);
     startTransition(async () => {
       try {
-        await markAttendance(studentId, date, status);
+        const res = await markAttendance(studentId, date, status);
+        if (res && res.ok === false) {
+          setError(res.error + (res.hint ? " " + res.hint : ""));
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Saqlashda xatolik");
       }
@@ -131,7 +134,10 @@ export function DailyClient({
     setError(null);
     startTransition(async () => {
       try {
-        await markDismissal(studentId, date, method);
+        const res = await markDismissal(studentId, date, method);
+        if (res && res.ok === false) {
+          setError(res.error + (res.hint ? " " + res.hint : ""));
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Saqlashda xatolik");
       }
@@ -146,7 +152,11 @@ export function DailyClient({
     setError(null);
     startTransition(async () => {
       try {
-        await saveGrade(fd);
+        const res = await saveGrade(fd);
+        if (res && res.ok === false) {
+          setError(res.error + (res.hint ? " " + res.hint : ""));
+          return;
+        }
         form.reset();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Saqlashda xatolik");
@@ -158,7 +168,10 @@ export function DailyClient({
     setError(null);
     startTransition(async () => {
       try {
-        await deleteGrade(id);
+        const res = await deleteGrade(id);
+        if (res && res.ok === false) {
+          setError(res.error + (res.hint ? " " + res.hint : ""));
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "O'chirishda xatolik");
       }

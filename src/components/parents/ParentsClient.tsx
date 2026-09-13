@@ -30,7 +30,11 @@ function ParentForm({
     setError(null);
     startTransition(async () => {
       try {
-        await saveParent(fd);
+        const res = await saveParent(fd);
+        if (res && res.ok === false) {
+          setError(res.error + (res.hint ? " " + res.hint : ""));
+          return;
+        }
         onDone();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Saqlashda xatolik yuz berdi");
@@ -97,7 +101,11 @@ export function ParentsClient({ parents, students }: { parents: Parent[]; studen
     setError(null);
     startTransition(async () => {
       try {
-        await deleteParent(deleting.id);
+        const res = await deleteParent(deleting.id);
+        if (res && res.ok === false) {
+          setError(res.error + (res.hint ? " " + res.hint : ""));
+          return;
+        }
         setDeleting(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "O'chirishda xatolik");

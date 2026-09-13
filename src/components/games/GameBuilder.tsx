@@ -149,8 +149,12 @@ export function GameBuilder({ books, initial }: Props) {
         editing && initial
           ? await actionUpdateCustomGame(initial.id, payload)
           : await actionSaveCustomGame(payload);
-      setSaved(res.id);
-      router.push(`/games/${res.id}`);
+      if (res.ok === false) {
+        setError(res.error + (res.hint ? " " + res.hint : ""));
+        return;
+      }
+      setSaved(res.data.id);
+      router.push(`/games/${res.data.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Saqlashda xato");
     } finally {

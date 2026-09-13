@@ -68,6 +68,7 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
   const [pasteText, setPasteText] = useState("");
   const [pasting, setPasting] = useState(false);
   const [pasteError, setPasteError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(
@@ -144,7 +145,7 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
         }
 
         updateJob(job.id, { status: "uploading", progress: "Serverga yuborilmoqda…", percent: 58 });
-        const { uploadId } = await actionStartUpload({
+        const started = await actionStartUpload({
           title,
           grade: job.grade,
           subject: job.subject,
@@ -152,10 +153,15 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
           sizeBytes: job.sizeBytes,
           kind,
         });
+        if (started.ok === false) throw new Error(started.error + (started.hint ? " " + started.hint : ""));
+        const uploadId = started.data.uploadId;
 
         for (let p = 0; p < pages.length; p += UPLOAD_BATCH_PAGES) {
           const batch = pages.slice(p, p + UPLOAD_BATCH_PAGES);
-          await actionAppendPages(uploadId, batch);
+          const appended = await actionAppendPages(uploadId, batch);
+          if (appended.ok === false) {
+            throw new Error(appended.error + (appended.hint ? " " + appended.hint : ""));
+          }
           const percent = 58 + Math.round(((p + batch.length) / pages.length) * 27);
           updateJob(job.id, {
             status: "uploading",
@@ -166,11 +172,17 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
 
         updateJob(job.id, { status: "analyzing", progress: "Mavzular va o'yinlar yasalmoqda…", percent: 88 });
         const res = await actionFinishUpload(uploadId);
+        if (res.ok === false) throw new Error(res.error + (res.hint ? " " + res.hint : ""));
         updateJob(job.id, {
           status: "done",
           percent: 100,
-          progress: `${res.topics} mavzu · ${res.games} o'yin tayyor`,
-          result: { bookId: res.bookId, topics: res.topics, games: res.games, strategy: res.strategy },
+          progress: `${res.data.topics} mavzu · ${res.data.games} o'yin tayyor`,
+          result: {
+            bookId: res.data.bookId,
+            topics: res.data.topics,
+            games: res.data.games,
+            strategy: res.data.strategy,
+          },
         });
         router.refresh();
       } catch (e) {
@@ -197,10 +209,14 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
         subject: pasteSubject,
         text: pasteText,
       });
+      if (res.ok === false) {
+        setPasteError(res.error + (res.hint ? " " + res.hint : ""));
+        return;
+      }
       setPasteText("");
       setPasteTitle("");
       setShowPaste(false);
-      router.push(`/books/${res.bookId}`);
+      router.push(`/books/${res.data.bookId}`);
     } catch (e) {
       setPasteError(e instanceof Error ? e.message : "Kitob yasashda xato yuz berdi.");
     } finally {
@@ -209,8 +225,17 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
   };
 
   const remove = async (id: string) => {
-    await actionDeleteBook(id);
-    router.refresh();
+    setListError(null);
+    try {
+      const res = await actionDeleteBook(id);
+      if (res && res.ok === false) {
+        setListError(res.error + (res.hint ? " " + res.hint : ""));
+        return;
+      }
+      router.refresh();
+    } catch (e) {
+      setListError(e instanceof Error ? e.message : "O'chirishda xatolik");
+    }
   };
 
   return (
@@ -435,6 +460,10 @@ export function BooksClient({ books }: { books: BookMeta[] }) {
             );
           })}
         </div>
+
+        {listError ? (
+          <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{listError}</p>
+        ) : null}
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((b) => (

@@ -2,6 +2,7 @@
 
 // ============================================================================
 // O'qituvchi o'yinlari uchun server amallari
+// Har biri safeAction() orqali ActionResult qaytaradi — throw yo'q, 500 yo'q.
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
@@ -13,6 +14,7 @@ import {
   parseCustomItems,
   updateCustomGame,
 } from "@/lib/books/custom";
+import { safeAction, ValidationError, type ActionResult } from "@/lib/action-result";
 
 export interface SaveCustomInput {
   title: string;
@@ -29,45 +31,56 @@ export interface SaveCustomInput {
   topicId?: string;
 }
 
-export async function actionSaveCustomGame(input: SaveCustomInput) {
-  let items: GameItem[] = input.items ?? [];
-  if (!items.length && input.raw) {
-    items = normalizeItems(parseCustomItems(input.raw, input.type).items, input.type);
-  }
+export async function actionSaveCustomGame(
+  input: SaveCustomInput
+): Promise<ActionResult<{ id: string; items: number }>> {
+  return safeAction(async () => {
+    let items: GameItem[] = input.items ?? [];
+    if (!items.length && input.raw) {
+      items = normalizeItems(parseCustomItems(input.raw, input.type).items, input.type);
+    }
 
-  const game = await createCustomGame({
-    title: input.title,
-    type: input.type,
-    subject: input.subject,
-    grade: input.grade,
-    instructions: input.instructions,
-    difficulty: input.difficulty,
-    groups: input.groups,
-    items,
-    note: input.note,
-    bookId: input.bookId,
-    topicId: input.topicId,
-  });
+    const game = await createCustomGame({
+      title: input.title,
+      type: input.type,
+      subject: input.subject,
+      grade: input.grade,
+      instructions: input.instructions,
+      difficulty: input.difficulty,
+      groups: input.groups,
+      items,
+      note: input.note,
+      bookId: input.bookId,
+      topicId: input.topicId,
+    });
 
-  revalidatePath("/games");
-  revalidatePath(`/games/${game.id}`);
-  return { id: game.id, items: game.items.length };
+    revalidatePath("/games");
+    revalidatePath(`/games/${game.id}`);
+    return { id: game.id, items: game.items.length };
+  }, "actionSaveCustomGame");
 }
 
-export async function actionUpdateCustomGame(id: string, patch: SaveCustomInput) {
-  let items = patch.items ?? [];
-  if (!items.length && patch.raw) {
-    items = normalizeItems(parseCustomItems(patch.raw, patch.type).items, patch.type);
-  }
-  const game = await updateCustomGame(id, { ...patch, items });
-  if (!game) throw new Error("O'yin topilmadi.");
-  revalidatePath("/games");
-  revalidatePath(`/games/${id}`);
-  return { id: game.id, items: game.items.length };
+export async function actionUpdateCustomGame(
+  id: string,
+  patch: SaveCustomInput
+): Promise<ActionResult<{ id: string; items: number }>> {
+  return safeAction(async () => {
+    let items = patch.items ?? [];
+    if (!items.length && patch.raw) {
+      items = normalizeItems(parseCustomItems(patch.raw, patch.type).items, patch.type);
+    }
+    const game = await updateCustomGame(id, { ...patch, items });
+    if (!game) throw new ValidationError("O'yin topilmadi.");
+    revalidatePath("/games");
+    revalidatePath(`/games/${id}`);
+    return { id: game.id, items: game.items.length };
+  }, "actionUpdateCustomGame");
 }
 
-export async function actionDeleteCustomGame(id: string) {
-  const ok = await deleteCustomGame(id);
-  revalidatePath("/games");
-  return { ok };
+export async function actionDeleteCustomGame(id: string): Promise<ActionResult<{ deleted: boolean }>> {
+  return safeAction(async () => {
+    const deleted = await deleteCustomGame(id);
+    revalidatePath("/games");
+    return { deleted };
+  }, "actionDeleteCustomGame");
 }

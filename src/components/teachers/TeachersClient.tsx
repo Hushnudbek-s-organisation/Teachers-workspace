@@ -22,7 +22,11 @@ function TeacherForm({ teacher, onDone }: { teacher?: Teacher; onDone: () => voi
     setError(null);
     startTransition(async () => {
       try {
-        await saveTeacher(fd);
+        const res = await saveTeacher(fd);
+        if (res && res.ok === false) {
+          setError(res.error + (res.hint ? " " + res.hint : ""));
+          return;
+        }
         onDone();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Saqlashda xatolik yuz berdi");
@@ -80,7 +84,11 @@ export function TeachersClient({
     setError(null);
     startTransition(async () => {
       try {
-        await deleteTeacher(deleting.id);
+        const res = await deleteTeacher(deleting.id);
+        if (res && res.ok === false) {
+          setError(res.error + (res.hint ? " " + res.hint : ""));
+          return;
+        }
         setDeleting(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "O'chirishda xatolik");
