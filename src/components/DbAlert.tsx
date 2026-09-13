@@ -20,11 +20,13 @@ export async function DbAlert() {
 
   const issues = getDbIssues();
   const summary = await getDbStatusSummary();
+  if (summary.ok && !issues.length) return null;
 
   const issue = issues[0];
-  const title = issue?.message ?? (summary.ok ? "" : summary.title);
-  const detail = issue?.hint ?? (summary.ok ? "" : summary.detail);
-  if (summary.ok && !issue) return null;
+  const title = issue?.message ?? summary.title;
+  // issue bo'lsa uning o'zi yetarli; aks holda probe xulosasi ko'rsatiladi
+  const detail = issue ? undefined : summary.detail;
+  const hint = issue?.hint ?? summary.hint;
 
   const fatal = !summary.ok;
 
@@ -49,6 +51,11 @@ export async function DbAlert() {
             <p className={fatal ? "mt-0.5 text-sm text-red-800" : "mt-0.5 text-sm text-amber-800"}>{title}</p>
             {detail ? (
               <p className={fatal ? "mt-1 text-xs text-red-700" : "mt-1 text-xs text-amber-700"}>{detail}</p>
+            ) : null}
+            {hint ? (
+              <p className={fatal ? "mt-1 text-xs font-medium text-red-700" : "mt-1 text-xs font-medium text-amber-700"}>
+                💡 {hint}
+              </p>
             ) : null}
             {issue ? (
               <p className={fatal ? "mt-1 text-xs text-red-600" : "mt-1 text-xs text-amber-600"}>

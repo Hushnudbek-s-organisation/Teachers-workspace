@@ -231,6 +231,7 @@ function DoneScreen({
   const [studentId, setStudentId] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const message =
     percent >= 90
@@ -243,9 +244,10 @@ function DoneScreen({
 
   const save = async () => {
     setSaving(true);
+    setSaveError(null);
     try {
       const student = students.find((s) => s.id === studentId);
-      await actionSaveResult({
+      const res = await actionSaveResult({
         bookId,
         topicId,
         topicTitle,
@@ -258,8 +260,14 @@ function DoneScreen({
         total,
         timeSec: elapsedSec,
       });
+      if (res && res.ok === false) {
+        setSaveError(res.error + (res.hint ? " " + res.hint : ""));
+        return;
+      }
       setSaved(true);
       router.refresh();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Saqlashda xatolik");
     } finally {
       setSaving(false);
     }
@@ -318,6 +326,9 @@ function DoneScreen({
             </Button>
           </div>
         )}
+        {saveError ? (
+          <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{saveError}</p>
+        ) : null}
       </div>
     </div>
   );

@@ -12,9 +12,15 @@
 // Ishlatiladi: /setup sahifasi, /api/health, DbAlert.
 // ============================================================================
 
-import { describeConnectionError, describeSupabaseError, supabaseFetch, SUPABASE_TIMEOUT_MS } from "./supabase-fetch";
+import {
+  describeConnectionError,
+  describeSupabaseError,
+  supabaseFetch,
+  SUPABASE_TIMEOUT_MS,
+  type ExplainedError,
+} from "./supabase-fetch";
 import { validateSupabaseEnv } from "./repo";
-import { getCachedConnectionIssue } from "./db-status";
+import { getCachedBreakerIssue } from "./db-status";
 
 /** supabase/schema.sql'dagi 10 ta jadval */
 export const EXPECTED_TABLES = [
@@ -349,22 +355,47 @@ async function computeSummary(): Promise<DbSummary> {
     };
   }
 
-  // Ulanish xatosi allaqachon ma'lum bo'lsa, 7–10 soniya kutib probe qilmaymiz
-  const broken = getCachedConnectionIssue();
+  // Xato allaqachon ma'lum bo'lsa (breaker faol), 7–10 soniya kutib probe qilmaymiz
+  const broken = getCachedBreakerIssue();
   if (broken) {
-    return { mode: "supabase", ok: false, title: "Supabase'ga ulanib bo'lmadi", detail: broken.message, hint: broken.hint };
+    return {
+      mode: "supabase",
+      ok: false,
+      title: titleForKind(broken.kind),
+      // auth xatosida message prefiks bilan keladi; detail'da asl matn ko'rinsin
+      detail: broken.kind === "auth" ? broken.raw || broken.message : broken.message,
+      hint: broken.hint,
+    };
   }
 
   const probe = await rest("");
   if (probe.network) {
     const ex = describeConnectionError(probe.network);
-    return { mode: "supabase", ok: false, title: "Supabase'ga ulanib bo'lmadi", detail: ex.message, hint: ex.hint };
+    return summaryFromExplained(ex);
   }
   if (probe.status !== 200 && probe.status !== 206) {
     const ex = describeSupabaseError(probe.message ?? `HTTP ${probe.status}`);
-    return { mode: "supabase", ok: false, title: "Supabase so'rovni qabul qilmadi", detail: ex.message, hint: ex.hint };
+    return summaryFromExplained(ex);
   }
   return { mode: "supabase", ok: true, title: "supabase" };
+}
+
+/** Xato turiga mos sarlavha — DbAlert va /api/health uchun */
+function titleForKind(kind: ExplainedError["kind"]): string {
+  if (kind === "auth") return "Supabase kaliti qabul qilinmadi";
+  if (kind === "schema") return "Supabase sxemasi to'liq emas";
+  return "Supabase'ga ulanib bo'lmadi";
+}
+
+/** Izohlangan xatodan DbAlert xulosasini yasaydi (title/detail/hint) */
+function summaryFromExplained(ex: ExplainedError): DbSummary {
+  return {
+    mode: "supabase",
+    ok: false,
+    title: titleForKind(ex.kind),
+    detail: ex.kind === "auth" ? ex.raw || ex.message : ex.message,
+    hint: ex.hint,
+  };
 }
 
 export const DIAGNOSTICS_TIMEOUT_MS = SUPABASE_TIMEOUT_MS;

@@ -32,7 +32,11 @@ function ScheduleForm({
     setError(null);
     startTransition(async () => {
       try {
-        await saveSchedule(fd);
+        const res = await saveSchedule(fd);
+        if (res && res.ok === false) {
+          setError(res.error + (res.hint ? " " + res.hint : ""));
+          return;
+        }
         onDone();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Saqlashda xatolik yuz berdi");
@@ -130,7 +134,11 @@ export function ScheduleClient({
     setError(null);
     startTransition(async () => {
       try {
-        await deleteSchedule(deleting.id);
+        const res = await deleteSchedule(deleting.id);
+        if (res && res.ok === false) {
+          setError(res.error + (res.hint ? " " + res.hint : ""));
+          return;
+        }
         setDeleting(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "O'chirishda xatolik");

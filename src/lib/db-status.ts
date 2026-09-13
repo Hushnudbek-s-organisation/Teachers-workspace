@@ -61,32 +61,56 @@ function explain(source: string, err: unknown): ExplainedError {
   const explained = /fetch|ENOTFOUND|ECONN|abort|socket|timed out|manzili topilmadi|javob bermadi/i.test(message)
     ? describeConnectionError(err)
     : describeSupabaseError(message, table);
-  // "Supabase xatosi: Supabase: ..." kabi takrorlanishni va keraksiz
-  // "Error: " prefiksini tozalaymiz (foydalanuvchiga toza matn ko'rsatiladi)
-  const tidy = (t: string) =>
-    t.replace(/Supabase xatosi: (Supabase: )+/g, "Supabase: ").replace(/:\s*Error:\s*/g, ": ");
   explained.message = tidy(explained.message);
   explained.hint = tidy(explained.hint);
   return explained;
 }
 
+/**
+ * Xato matnidagi takrorlanishlarni tozalaydi (foydalanuvchiga toza matn
+ * ko'rsatiladi). Xatolar guardWrite → safeAction zanjirida qayta izohlanishi
+ * mumkin — shunda "Supabase kaliti qabul qilinmadi: Supabase kaliti qabul
+ * qilinmadi: ..." kabi ikkilanishlar chiqardi; bittaga yig'amiz.
+ */
+function tidy(t: string): string {
+  return t
+    .replace(/Supabase xatosi: (Supabase: )+/g, "Supabase: ")
+    .replace(/:\s*Error:\s*/g, ": ")
+    .replace(/^([^:]{3,150}: )\1+/g, "$1"); // "A: A: matn" → "A: matn"
+}
+
 // ---------------------------------------------------------------------------
-// "Ulanish uzilgan" rejimi (circuit breaker)
+// "Tez to'xtatish" rejimi (circuit breaker)
 //
 // Baza javob bermasa har bir sahifa DNS/taymer vaqtini kutib, 7–10 soniya
-// "qotib" turardi. Birinchi xatodan keyin CONNECTION_BREAKER_MS davomida
-// tarmoqqa umuman chiqmaymiz: sahifalar darhol bo'sh ro'yxat bilan ochiladi,
-// xato esa ogohlantirishda ko'rinadi. Vaqt o'tgach so'rovlar qayta uriniladi.
+// "qotib" turardi; kalit noto'g'ri bo'lsa har sahifa 6–17 ta so'rovni qayta
+// yuborib, bir xil 401 ni olardi (Vercel logida takrorlanib turardi).
+// Birinchi xatodan keyin BREAKER_MS davomida tarmoqqa umuman chiqmaymiz:
+// sahifalar darhol bo'sh ro'yxat bilan ochiladi, xato esa ogohlantirishda
+// ko'rinadi. Vaqt o'tgach so'rovlar avtomatik qayta uriniladi.
+//
+// Qamrov:
+//   • tarmoq xatolari — timeout/dns/refused/tls/network
+//   • auth            — kalit qabul qilinmadi (401), har urinishda takrorlanadi
+//   • schema          — jadval/VIEW yo'q, SQL ishga tushmaguncha o'zgarmaydi
 // ---------------------------------------------------------------------------
 
-/** Ulanish xatosidan keyin tarmoqqa chiqilmaydigan vaqt (ms) */
+/** Xatodan keyin tarmoqqa chiqilmaydigan vaqt (ms); undan so'ng avtomatik qayta urinish */
 export const CONNECTION_BREAKER_MS = 30_000;
 
-const CONNECTION_KINDS: ExplainedError["kind"][] = ["timeout", "dns", "refused", "tls", "network"];
+const BREAKER_KINDS: ExplainedError["kind"][] = [
+  "timeout",
+  "dns",
+  "refused",
+  "tls",
+  "network",
+  "auth",
+  "schema",
+];
 
-/** Yaqinda qayd etilgan ulanish xatosi (agar bo'lsa) */
-export function getCachedConnectionIssue(): DbIssue | undefined {
-  const found = store.issues.find((i) => CONNECTION_KINDS.includes(i.kind));
+/** Yaqinda (BREAKER_MS ichida) qayd etilgan breaker-xato (agar bo'lsa) */
+export function getCachedBreakerIssue(): DbIssue | undefined {
+  const found = store.issues.find((i) => BREAKER_KINDS.includes(i.kind));
   if (!found) return undefined;
   return Date.now() - new Date(found.at).getTime() < CONNECTION_BREAKER_MS ? found : undefined;
 }
@@ -113,7 +137,7 @@ export async function safeRead<T>(
   read: () => Promise<T[]>,
   fallback: T[] = []
 ): Promise<T[]> {
-  if (getCachedConnectionIssue()) return fallback;
+  if (getCachedBreakerIssue()) return fallback;
   try {
     return await read();
   } catch (err) {
@@ -125,7 +149,7 @@ export async function safeRead<T>(
 
 /** Bitta yozuvni o'qish (topilmasa null) */
 export async function safeReadOne<T>(source: string, read: () => Promise<T | null>): Promise<T | null> {
-  if (getCachedConnectionIssue()) return null;
+  if (getCachedBreakerIssue()) return null;
   try {
     return await read();
   } catch (err) {
@@ -140,18 +164,32 @@ export async function safeReadOne<T>(source: string, read: () => Promise<T | nul
 // ---------------------------------------------------------------------------
 
 /**
+ * Baza xatosi tushuntirilgan DbIssue bilan birga otiladi.
+ * `safeAction` (src/lib/action-result.ts) dbIssue'ni o'qib, xatoni qayta
+ * izohlamasdan to'g'ridan-to'g'ri ActionResult'ga aylantiradi — shunda matn
+ * ikkilanmaydi va hint alohida maydonda boradi.
+ */
+export type DbWriteError = Error & { dbIssue?: DbIssue };
+
+function toDbError(issue: DbIssue, cause?: unknown): DbWriteError {
+  const e = new Error(issue.message) as DbWriteError;
+  e.dbIssue = issue;
+  if (cause !== undefined) (e as Error & { cause?: unknown }).cause = cause;
+  return e;
+}
+
+/**
  * Yozish so'rovi. Xato bo'lsa — tushunarli matn bilan qayta tashlanadi
  * (foydalanuvchi "saqlanmadi"ni bilishi kerak), lekin sabab aniq bo'ladi.
+ * Breaker faol bo'lsa tarmoqqa umuman chiqilmaydi — keshdagi xato otiladi.
  */
 export async function guardWrite<T>(source: string, write: () => Promise<T>): Promise<T> {
-  const broken = getCachedConnectionIssue();
-  if (broken) throw new Error(`${broken.message} ${broken.hint}`);
+  const broken = getCachedBreakerIssue();
+  if (broken) throw toDbError(broken);
   try {
     return await write();
   } catch (err) {
     const issue = recordDbIssue(source, err);
-    const e = new Error(`${issue.message} ${issue.hint}`);
-    (e as Error & { cause?: unknown }).cause = err;
-    throw e;
+    throw toDbError(issue, err);
   }
 }
