@@ -1,17 +1,23 @@
 import Link from "next/link";
-import { Gamepad2, Plus, Sparkles, Wand2 } from "lucide-react";
+import { Gamepad2, Plus, Sparkles, Trophy, Wand2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button, Card, EmptyState } from "@/components/ui";
 import { Badge } from "@/components/ui";
 import { GAME_TYPES } from "@/lib/books/types";
 import { listCustomGames } from "@/lib/books/custom";
-import { listBookMetas } from "@/lib/books/store";
+import { listBookMetas, listResults } from "@/lib/books/store";
+import { summarizeGameResults } from "@/lib/books/game-stats";
 import { CustomGameList } from "@/components/games/CustomGameList";
 
 export const dynamic = "force-dynamic";
 
 export default async function GamesPage() {
-  const [games, books] = await Promise.all([listCustomGames(), listBookMetas()]);
+  const [games, books, results] = await Promise.all([
+    listCustomGames(),
+    listBookMetas(),
+    listResults(),
+  ]);
+  const stats = summarizeGameResults(results, 0);
 
   return (
     <>
@@ -27,7 +33,7 @@ export default async function GamesPage() {
         }
       />
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Link href="/games/new" className="group">
           <Card className="h-full p-4 transition-all group-hover:border-indigo-300 group-hover:shadow-sm">
             <div className="mb-2 inline-flex rounded-xl bg-indigo-50 p-2 text-indigo-600">
@@ -47,6 +53,19 @@ export default async function GamesPage() {
             <p className="text-sm font-semibold text-slate-900">Sinf bilan o'ynash</p>
             <p className="mt-0.5 text-xs text-slate-500">
               Charxpalak · Guruhlar viktorinasi · Bingo kartalari
+            </p>
+          </Card>
+        </Link>
+        <Link href="/games/stats" className="group">
+          <Card className="h-full p-4 transition-all group-hover:border-amber-300 group-hover:shadow-sm">
+            <div className="mb-2 inline-flex rounded-xl bg-amber-50 p-2 text-amber-600">
+              <Trophy className="h-5 w-5" />
+            </div>
+            <p className="text-sm font-semibold text-slate-900">O'yinlar statistikasi</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {results.length
+                ? `${stats.plays} ta natija · o'rtacha ${stats.percent}% · ${stats.players} o'yinchi`
+                : "1, 2 yoki 3 kishilik o'yinlar natijalari shu yerda"}
             </p>
           </Card>
         </Link>

@@ -41,6 +41,7 @@ export default async function CustomGamePage({ params }: { params: Promise<{ id:
         topicId={game.topicId ?? "custom"}
         topicTitle={game.builtFrom.note}
         students={students}
+        saveBookId={game.bookId ?? null}
       />
     </>
   );
