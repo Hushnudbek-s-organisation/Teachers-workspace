@@ -380,6 +380,7 @@ export function dealBoards<T>(
  * Bir xil `round` qiymatidagi barcha o'yinchilar bir xil seed bilan tarqatiladi —
  * shuning uchun ularning savollari bir-biridan farq qiladi (bir xil misol ikki
  * o'yinchiga tushmaydi), har birida elementlar soni esa teng bo'ladi.
+ * `base` — har o'yin boshlanganda tasodifiy, shunda har safar boshqa tartib.
  */
 export function dealRound<T>(
   items: readonly T[],
@@ -387,9 +388,10 @@ export function dealRound<T>(
   setup: GameSetup,
   playerIndex: number,
   round: number,
-  groupOf?: (item: T) => string
+  groupOf?: (item: T) => string,
+  base = 0
 ): T[] {
-  const seed = roundSeed(round);
+  const seed = roundSeed(round, base);
   if (isBoardGame(type)) {
     const deal = dealBoards(items, type, setup.players, seed, groupOf);
     return deal.decks[playerIndex] ?? [...items];

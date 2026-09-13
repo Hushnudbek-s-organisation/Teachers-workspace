@@ -78,6 +78,8 @@ export function MultiplayerArena({
   const endedRef = useRef(false);
   const rounds = plannedRounds(game.type, setup);
   const unlimited = isUnlimited(setup);
+  // Har o'yin boshlanganda tasodifiy baza — har safar boshqa tartib
+  const baseSeed = useMemo(() => Math.floor(Math.random() * 1000000), []);
 
   const initial = useMemo<Runtime[]>(
     () =>
@@ -86,7 +88,7 @@ export function MultiplayerArena({
         name: setup.names[i] ?? `${i + 1}-o'yinchi`,
         studentId: setup.studentIds[i] ?? null,
         round: 0,
-        items: dealRound(game.items, game.type, setup, i, 0, groupOfItem),
+        items: dealRound(game.items, game.type, setup, i, 0, groupOfItem, baseSeed),
         bankedScore: 0,
         bankedTotal: 0,
         live: { answered: 0, score: 0, total: 0 },
@@ -153,14 +155,14 @@ export function MultiplayerArena({
             bankedScore,
             bankedTotal,
             round: nextRound,
-            items: dealRound(game.items, game.type, setup, index, nextRound, groupOfItem),
+            items: dealRound(game.items, game.type, setup, index, nextRound, groupOfItem, baseSeed),
             live: { answered: 0, score: 0, total: 0 },
             touchedAt: Date.now(),
           };
         })
       );
     },
-    [game.items, game.type, rounds, setup]
+    [game.items, game.type, rounds, setup, baseSeed]
   );
 
   // ------------------------------ Yakunlash sharti --------------------------

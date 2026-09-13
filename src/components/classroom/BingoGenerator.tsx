@@ -11,7 +11,7 @@ import { useMemo, useState } from "react";
 import { Download, Grid3x3, Printer, Shuffle, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
-import { shuffleStable } from "@/components/books/board-utils";
+import { shuffleRandom, shuffleStable } from "@/components/books/board-utils";
 
 export function BingoGenerator({
   bookWords,
@@ -42,7 +42,7 @@ export function BingoGenerator({
   const cards = useMemo(() => {
     if (!enough) return [];
     return Array.from({ length: count }, (_, c) =>
-      shuffleStable(words, seed * 977 + c * 31).slice(0, cellCount)
+      shuffleRandom(words).slice(0, cellCount)
     );
   }, [words, cellCount, count, seed, enough]);
 

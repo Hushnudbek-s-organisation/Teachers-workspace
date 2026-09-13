@@ -16,6 +16,16 @@ export function shuffleStable<T>(arr: readonly T[], seed: number): T[] {
   return shuffleSeeded(arr, seed);
 }
 
+/** Haqiqiy tasodifiy aralashtirish — har safar boshqa tartib (Fisher–Yates + Math.random) */
+export function shuffleRandom<T>(arr: readonly T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 /** Taxtaning jonli holati (bo'lingan ekranda hisob ko'rsatish uchun) */
 export interface BoardProgress {
   /** Nechta savol/topshiriq bajarildi */

@@ -20,7 +20,7 @@ import type {
   TextItem,
 } from "@/lib/books/types";
 import { Button } from "@/components/ui";
-import { Progress, shuffleStable, useBoardProgress, useCountdown, type BoardProps } from "./board-utils";
+import { Progress, shuffleRandom, shuffleStable, useBoardProgress, useCountdown, type BoardProps } from "./board-utils";
 
 // ---------------------------------------------------------------------------
 // 🎈 BALONNI OT — to'g'ri javob yozilgan balonni yorish (vaqt bilan)
@@ -42,7 +42,9 @@ export function PopBoard({
   const [resolved, setResolved] = useState(false);
 
   const item = items[index];
-  const positions = useMemo(() => balloonLayout(item ? item.options.length : 4, index), [index, item]);
+  // Har bir savol uchun variantlarni ham aralashtiramiz
+  const shuffledOptions = useMemo(() => (item ? shuffleRandom(item.options) : []), [item, index]);
+  const positions = useMemo(() => balloonLayout(shuffledOptions.length || 4, index), [shuffledOptions.length, index]);
 
   useBoardProgress(onProgress, resolved ? index + 1 : index, score, items.length);
 
@@ -78,7 +80,7 @@ export function PopBoard({
   const hit = (optIndex: number) => {
     if (popped.length || resolved) return;
     setResolved(true);
-    const isCorrect = String(item.options[optIndex]) === String(item.answer);
+    const isCorrect = String(shuffledOptions[optIndex]) === String(item.answer);
     setPopped([optIndex]);
     if (!isCorrect) setWrong(optIndex);
     next(isCorrect);
@@ -106,7 +108,7 @@ export function PopBoard({
           compact ? "h-[180px]" : "h-[300px]"
         )}
       >
-        {item.options.map((opt, i) => {
+        {shuffledOptions.map((opt, i) => {
           const pos = positions[i];
           const isPopped = popped.includes(i);
           const isWrong = wrong === i;
@@ -153,8 +155,8 @@ export function PopBoard({
   );
 }
 
-/** Balonlarni ekranda tarqatib joylashtirish */
-function balloonLayout(count: number, seed: number): Array<{ x: number; y: number }> {
+/** Balonlarni ekranda tarqatib joylashtirish — har safar tasodifiy */
+function balloonLayout(count: number, _seed: number): Array<{ x: number; y: number }> {
   const slots = [
     { x: 18, y: 12 },
     { x: 50, y: 6 },
@@ -162,9 +164,8 @@ function balloonLayout(count: number, seed: number): Array<{ x: number; y: numbe
     { x: 30, y: 50 },
     { x: 68, y: 52 },
   ];
-  const rotated = [...slots.slice(0, count)];
-  const shift = seed % Math.max(1, rotated.length);
-  return [...rotated.slice(shift), ...rotated.slice(0, shift)];
+  // Har safar yangi tartib — Math.random
+  return shuffleRandom(slots.slice(0, count));
 }
 
 // ---------------------------------------------------------------------------
@@ -179,10 +180,7 @@ export function PuzzleBoard({ items, onFinish, onProgress, compact }: BoardProps
   const [hint, setHint] = useState(false);
 
   const item = items[index];
-  const pieces = useMemo(
-    () => (item ? shuffleStable(item.pieces, index * 31 + item.answer.length) : []),
-    [item, index]
-  );
+  const pieces = useMemo(() => (item ? shuffleRandom(item.pieces) : []), [item, index]);
 
   useBoardProgress(onProgress, checked != null ? index + 1 : index, score, items.length);
 
@@ -318,6 +316,7 @@ export function MissingLetterBoard({ items, onFinish, onProgress, compact }: Boa
   const [picked, setPicked] = useState<string | null>(null);
 
   const item = items[index];
+  const shuffledOptions = useMemo(() => (item ? shuffleRandom(item.options) : []), [item, index]);
   useEffect(() => {
     setPicked(null);
   }, [index]);
@@ -368,7 +367,7 @@ export function MissingLetterBoard({ items, onFinish, onProgress, compact }: Boa
       </div>
 
       <div className={cn("grid grid-cols-4 gap-2.5", compact && "gap-1.5")}>
-        {item.options.map((opt, i) => {
+        {shuffledOptions.map((opt, i) => {
           const isAnswer = opt === item.answer;
           const chosen = picked === opt;
           return (
@@ -606,10 +605,7 @@ export function BingoBoard({
 }: BoardProps & { items: TextItem[]; title: string }) {
   const size = items.length >= 16 ? 4 : 3;
   const cellCount = size * size;
-  const cells = useMemo(
-    () => shuffleStable(items.map((i) => i.text), 7).slice(0, cellCount),
-    [items, cellCount]
-  );
+  const cells = useMemo(() => shuffleRandom(items.map((i) => i.text)).slice(0, cellCount), [items, cellCount]);
 
   const [marked, setMarked] = useState<number[]>([]);
   const [called, setCalled] = useState<string[]>([]);
@@ -617,8 +613,8 @@ export function BingoBoard({
   const [bingo, setBingo] = useState(false);
   const [finished, setFinished] = useState(false);
 
-  // Chaqiriladigan so'zlar navbati (o'qituvchi uchun)
-  const callList = useMemo(() => shuffleStable(items.map((i) => i.text), 21), [items]);
+  // Chaqiriladigan so'zlar navbati (o'qituvchi uchun) — har safar aralash
+  const callList = useMemo(() => shuffleRandom(items.map((i) => i.text)), [items]);
 
   const isBingo = useMemo(() => {
     const set = new Set(marked);
