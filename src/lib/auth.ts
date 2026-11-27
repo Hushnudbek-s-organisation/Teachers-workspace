@@ -115,34 +115,50 @@ export async function logout(): Promise<void> {
   jar.delete(TEACHER_COOKIE);
 }
 
-/** Cookie'dagi sessiyani tekshirish (hech qanday redirect yo'q) */
+/** Cookie'dagi sessiyani tekshirish (hech qanday redirect yo'q).
+ *  DEMO/preview rejimda (Supabase ulanmagan) sessiya bo'lmasa ham demo admin
+ *  sifatida ochiladi — sandbox preview'da login oynasisiz ichkarini ko'rsatish
+ *  uchun. Supabase ulangan PRODUCTION'da bu yo'l YO'Q: login majburiy. */
 export async function getTeacherSession(): Promise<TeacherSession | null> {
-  const { findAccountById } = await import("@/lib/auth-core");
+  const { findAccountById, demoSessions, ensureDemoAdmin } = await import("@/lib/auth-core");
   const jar = await cookies();
   const token = jar.get(TEACHER_COOKIE)?.value;
-  if (!token) return null;
-  const hash = tokenHash(token);
+  const hash = token ? tokenHash(token) : null;
 
   let accountId: string | null = null;
-  if (!isSupabaseConfigured()) {
-    const { demoSessions } = await import("@/lib/auth-core");
+  if (hash && !isSupabaseConfigured()) {
     const s = demoSessions().get(hash);
-    if (!s) return null;
-    if (Date.now() > s.expiresAt) {
-      demoSessions().delete(hash);
-      return null;
+    if (s) {
+      if (Date.now() > s.expiresAt) {
+        demoSessions().delete(hash);
+      } else {
+        accountId = s.accountId;
+      }
     }
-    accountId = s.accountId;
-  } else {
+  } else if (hash && isSupabaseConfigured()) {
     const res = await sb()
       .from("teacher_sessions")
       .select("account_id, expires_at")
       .eq("token_hash", hash)
       .maybeSingle();
     const row = res.data as { account_id: string; expires_at: string } | null;
-    if (!row) return null;
-    if (new Date(row.expires_at).getTime() < Date.now()) return null;
-    accountId = row.account_id;
+    if (row && new Date(row.expires_at).getTime() >= Date.now()) {
+      accountId = row.account_id;
+    }
+  }
+
+  // Demo fallback: cookie yo'q/yaroqsiz — demo admin (faqat Supabase ulanmaganIDA)
+  if (!accountId && !isSupabaseConfigured()) {
+    const demo = await ensureDemoAdmin();
+    if (demo) {
+      return {
+        accountId: demo.id,
+        email: demo.email,
+        displayName: demo.display_name,
+        role: demo.role,
+        teacherId: demo.teacher_id,
+      };
+    }
   }
 
   const account = accountId ? await findAccountById(accountId) : null;

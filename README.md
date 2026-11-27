@@ -29,9 +29,10 @@ npm run dev          # http://localhost:3000
 
 Agar `.env.local` da Supabase kalitlari **bo'lmasa**, ilova avtomatik **Demo rejimi**ga
 o'tadi: xotiradagi realistik namoyish ma'lumotlari bilan to'liq CRUD va grafiklar
-ishlaydi (server qayta ishga tushganda yangilanadi). Barcha sahifalar uchun kirish:
-`/login` → **ustoz@demo.uz** / **demo1234** (faqat demo rejimda; prod da hisoblar
-`/setup-access` da birinchi administrator sifatida yaratiladi).
+ishlaydi (server qayta ishga tushganda yangilanadi). Demo rejimida sahifalar
+**parolsiz ochiladi** (avtomatik demo admin); istasangiz `/login` →
+**ustoz@demo.uz** / **demo1234**. Supabase ulangan production'da esa login
+MAJBURIY — hisoblar `/setup-access` da birinchi administrator sifatida yaratiladi.
 
 ## 🔌 Supabase'ni ulash (real ma'lumotlar)
 

@@ -90,11 +90,12 @@ export function resetAuthDemoStore(): void {
   g.__teacherAuthDemo = undefined;
 }
 
-/** Demo rejimda ishlashi uchun standart admin (FAQAT demo — Supabase bo'lsa yaratilmaydi) */
-export async function ensureDemoAdmin(): Promise<void> {
-  if (isSupabaseConfigured()) return;
+/** Demo rejimda ishlashi uchun standart admin (FAQAT demo — Supabase bo'lsa yaratilmaydi).
+ *  Hisob qatorini qaytaradi (Supabase rejimida null). */
+export async function ensureDemoAdmin(): Promise<AccountRow | null> {
+  if (isSupabaseConfigured()) return null;
   const d = demoAuth();
-  if (d.accounts.size > 0) return;
+  if (d.accounts.size > 0) return d.accounts.get("demo-admin") ?? null;
   const row: AccountRow = {
     id: "demo-admin",
     teacher_id: null,
@@ -104,6 +105,7 @@ export async function ensureDemoAdmin(): Promise<void> {
     role: "admin",
   };
   d.accounts.set(row.id, row);
+  return row;
 }
 
 // ------------------------------- Parollar ----------------------------------
