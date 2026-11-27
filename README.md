@@ -161,6 +161,22 @@ O'qituvchi **O'quvchilar** sahifasida har bir bola uchun **shaxsiy havola** bera
   sahifasida, har bir qator
   🔗 tugmalari orqali.
 
+## 📲 Bolalarga havolani qanday yuborish
+
+**Havola = bolaning akkaunti**: parol yo'q, faqat o'z havolasi bilan kiradi.
+
+1. **Bitta bolaga** — O'quvchilar sahifasida qatorni toping → **«Link berish» /
+   «Yangilash»** → ochilgan oynada havolani nusxalab **WhatsApp / Telegram**
+   tugmasi bilan ota-onasiga yuboring yoki QR'ni telefon kamerasiga skanerlating.
+2. **Butun sinfga bir yo'la** — **«Havolalarni chiqarish»** tugmasi → sinf
+   tanlanadi → har havola-siz bola uchun **QR kartochka** yasaladi →
+   **🖨 Chop etish** bilan kesib tarqating (yoki bolaga skanerlating).
+   Allaqachon faol havolasi bor bolalarga tegilmaydi.
+3. **Havola yo'qoldi** — qatordagi **«Yangilash»** eski havolani o'chirib yangisini
+   bir marta ko'rsatadi; **«Bekor»** esa umuman yopadi.
+4. Havolalar FAQAT berilgan paytda ko'rinadi (bazada faqat maxfiy xesh saqlanadi)
+   — nusxalash/chop etishni o'sha oynada bajarish shart.
+
 ## 🤝 «Do'stim bilan o'ynash» (2 qurilma)
 
 1. O'quvchi portaldan «Do'stim bilan o'ynash» → **taklif havolasi** yasaladi

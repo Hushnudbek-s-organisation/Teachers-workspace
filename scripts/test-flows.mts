@@ -34,10 +34,12 @@ import {
   getResultById,
   resetPortalDemoStore,
 } from "../src/lib/portal/store.ts";
+import { issueClassLinks } from "../src/lib/portal/links.ts";
 import { buildPortalCatalog, portalInfoFor } from "../src/lib/portal/catalog.ts";
 import { listResults, listBookMetas } from "../src/lib/books/store.ts";
 import { listCustomGames } from "../src/lib/books/custom.ts";
 import { gradeFromClass } from "../src/lib/portal/catalog.ts";
+import type { TeacherSession } from "../src/lib/auth-core.ts";
 
 let passed = 0;
 let failed = 0;
@@ -325,6 +327,53 @@ await section("OQIM 3: statistika filtrlari (sinf, o'quvchi, o'yin, sana)", asyn
   const books = await listBookMetas();
   const custom = await listCustomGames();
   check("Kitob va o'qituvchi o'yinlari ro'yxatlari o'qiladi", Array.isArray(books) && Array.isArray(custom));
+});
+
+// ---------------------------------------------------------------------------
+await section("OQIM 4: sinf havolalari bir vaqtda (QR kartochkalar)", async () => {
+  resetPortalDemoStore();
+  const a = await makeStudent("Klass Aliyev", "5-C");
+  await makeStudent("Klass Botirova", "5-C");
+  await makeStudent("Boshqa Sinfli", "6-D");
+
+  const adminSession: TeacherSession = {
+    accountId: "test-admin",
+    email: "t@t.uz",
+    displayName: "Test admin",
+    role: "admin",
+    teacherId: null,
+  };
+
+  const res1 = await issueClassLinks(adminSession, "5-C", BASE);
+  check("Sinfdagi 2 o'quvchiga havola berildi", res1.issued.length === 2);
+  check("Boshqa sinfga (6-D) tegilmadi", res1.className === "5-C" && res1.issued.every((r) => r.className === "5-C"));
+  check("QR kod PNG data URL", res1.issued.every((r) => r.qr.startsWith("data:image/png;base64,")));
+  check("Havolada ISM YO'Q (PII himoyasi)", res1.issued.every((r) => !r.url.includes("Aliyev") && !r.url.includes("Botirova")));
+  check("Har havola UNIKAL", res1.issued[0]!.url !== res1.issued[1]!.url);
+
+  // Kartochkadagi havola haqiqatan bolani ochadi
+  const open = await resolveStudentByToken(res1.issued[0]!.url.split("/o/")[1]!);
+  check("Kartochkadagi havola o'quvchini ochadi (parol yo'q)", open?.id === a.id);
+
+  // Qayta chiqarish — mavjud faol havolalar qayta yozilmaydi
+  const res2 = await issueClassLinks(adminSession, "5-C", BASE);
+  check("Qayta chiqarish: 0 yangi, 2 allaqachon faol", res2.issued.length === 0 && res2.alreadyActive === 2);
+
+  // Bitta havola bekor qilinsa — faqat o'sha bolaga yangi beriladi
+  await revokeStudentLink(a.id);
+  const res3 = await issueClassLinks(adminSession, "5-C", BASE);
+  check("Bekor qilinganga faqat 1 yangi havola", res3.issued.length === 1 && res3.issued[0]!.studentId === a.id);
+  check("alreadyActive = 1 (Botirova havolasi saqlangan)", res3.alreadyActive === 1);
+
+  // O'qituvchiga o'ziga bog'lanmagan sinf RUXSAT EMAS (sinf huquqlari)
+  const teacherSession: TeacherSession = { ...adminSession, role: "teacher" };
+  let denied = false;
+  try {
+    await issueClassLinks(teacherSession, "6-D", BASE);
+  } catch {
+    denied = true;
+  }
+  check("O'qituvchi o'z sinfi bo'lmagan sinfga chiqa olmaydi", denied);
 });
 
 async function resolveCatalogGameSafe(key: string) {

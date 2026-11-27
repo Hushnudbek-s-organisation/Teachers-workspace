@@ -18,14 +18,19 @@ import {
   Copy,
   KeyRound,
   Link2Off,
+  MessageCircle,
   Pencil,
   Plus,
+  Printer,
+  QrCode,
   RefreshCw,
   Search,
+  Send,
   Trash2,
   Users,
 } from "lucide-react";
 import {
+  actionIssueClassLinks,
   actionIssueStudentLink,
   actionRevokeStudentLink,
   actionRotateStudentLink,
@@ -61,6 +66,35 @@ export interface LinkStatusView {
   revokedAt: string | null;
 }
 
+interface IssuedCard {
+  studentId: string;
+  fullName: string;
+  url: string;
+  qr: string;
+}
+
+interface ClassLinksView {
+  className: string;
+  issued: IssuedCard[];
+  alreadyActive: number;
+}
+
+/** WhatsApp/Telegram orqali ota-onaga yuborish (matnda ism YO'Q — ota-ona biladi) */
+function waHref(url: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(`🎮 Senga o'yin havolasi! Och va o'ynashni boshla: ${url}`)}`;
+}
+function tgHref(url: string): string {
+  return `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent("🎮 O'yin havolasi — och va o'ynashni boshla!")}`;
+}
+
+const PRINT_CSS = `@media print {
+  body * { visibility: hidden !important; }
+  .classlink-print-area, .classlink-print-area * { visibility: visible !important; }
+  .classlink-print-area { position: fixed !important; inset: 0 !important; overflow: visible !important; background: #fff !important; padding: 6mm !important; }
+  .classlink-print-card { break-inside: avoid; page-break-inside: avoid; border-color: #cbd5e1 !important; }
+  .classlink-screen-only { display: none !important; }
+}`;
+
 // ------------------------------- Forma -------------------------------------
 
 function StudentForm({
@@ -68,7 +102,7 @@ function StudentForm({
   onDone,
 }: {
   student?: Student;
-  onDone: (linkUrl: string | null) => void;
+  onDone: (link: { url: string; qr: string } | null) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -80,7 +114,7 @@ function StudentForm({
     startTransition(async () => {
       try {
         const res = await saveStudent(fd);
-        onDone(res?.linkUrl ?? null);
+        onDone(res?.linkUrl ? { url: res.linkUrl, qr: res.qr ?? "" } : null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Saqlashda xatolik yuz berdi");
       }
@@ -112,6 +146,7 @@ function StudentForm({
         <Button type="button" variant="secondary" onClick={() => onDone(null)}>
           Bekor qilish
         </Button>
+        {/* onDone(null) — link yaratilmadi holati ham xuddi shu yo'l bilan */}
         <Button type="submit" disabled={pending}>
           {pending ? "Saqlanmoqda..." : "Saqlash"}
         </Button>
@@ -125,10 +160,12 @@ function StudentForm({
 function LinkSuccessDialog({
   studentName,
   linkUrl,
+  qr,
   onClose,
 }: {
   studentName: string;
   linkUrl: string;
+  qr?: string | null;
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -173,6 +210,33 @@ function LinkSuccessDialog({
             {copied ? "Nusxalandi!" : "O'quvchi linkini nusxalash"}
           </button>
         </div>
+        {qr ? (
+          <div className="flex flex-col items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qr} alt="QR kod" className="h-40 w-40" />
+            <p className="text-center text-[11px] text-slate-500">
+              Telefon kamerasini shu kvadratga tutganda o'yin portali ochiladi — parol so'ralmaydi.
+            </p>
+          </div>
+        ) : null}
+        <div className="grid grid-cols-2 gap-2">
+          <a
+            href={waHref(linkUrl)}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+          >
+            <MessageCircle className="h-4 w-4" /> WhatsApp
+          </a>
+          <a
+            href={tgHref(linkUrl)}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg bg-sky-500 px-3 py-2.5 text-sm font-semibold text-white hover:bg-sky-600"
+          >
+            <Send className="h-4 w-4" /> Telegram
+          </a>
+        </div>
         {error ? <p className="text-xs text-red-600">{error}</p> : null}
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
           Keyinroq ro'yxatda havolani <b>yangilash</b> (eski havola o'ladi) yoki <b>bekor qilish</b> mumkin.
@@ -201,7 +265,7 @@ function LinkActions({
   studentName: string;
   status: LinkStatusView | undefined;
   onChanged: () => void;
-  onIssued: (info: { name: string; url: string }) => void;
+  onIssued: (info: { name: string; url: string; qr: string | null }) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
@@ -213,7 +277,7 @@ function LinkActions({
     try {
       const res = status?.active ? await actionRotateStudentLink(studentId) : await actionIssueStudentLink(studentId);
       if (res.ok && res.url) {
-        onIssued({ name: studentName, url: res.url });
+        onIssued({ name: studentName, url: res.url, qr: res.qr ?? null });
         onChanged();
       } else if (!res.ok) {
         setProblem(res.error ?? "Amal bajarilmadi");
@@ -312,7 +376,9 @@ export function StudentsClient({
   const [deleting, setDeleting] = useState<Student | null>(null);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [issued, setIssued] = useState<{ name: string; url: string } | null>(null);
+  const [issued, setIssued] = useState<{ name: string; url: string; qr: string | null } | null>(null);
+  const [linksModal, setLinksModal] = useState(false);
+  const [linksResult, setLinksResult] = useState<ClassLinksView | null>(null);
   const [version, setVersion] = useState(0);
 
   // Qidiruv + sinf filtri
@@ -361,6 +427,31 @@ export function StudentsClient({
         ))}
       </datalist>
 
+      {/* Yo'riqnoma: bolalarga havolani qanday yuborish */}
+      <div className="mb-6 rounded-2xl border border-indigo-200 bg-indigo-50/70 px-5 py-4">
+        <p className="text-sm font-semibold text-indigo-900">
+          <QrCode className="mr-1 inline h-4 w-4" /> Bolalarga o'yin linkini qanday yuboraman?
+        </p>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-relaxed text-slate-700">
+          <li>
+            <b>Havola = bolaning akkaunti.</b> Parol yo'q — havolani ochishi bilan o'z o'yinlarini
+            ko'radi. Har havola faqat <b>BITTA</b> bolaga tegishli, boshqa bola ma'lumoti ko'rinmaydi.
+          </li>
+          <li>
+            <b>Bitta bolaga:</b> qatorni topib <b>«Link berish»</b> tugmasini bosing → ochilgan
+            oynada havolani nusxalab <b>WhatsApp / Telegram</b> bilan ota-onasiga yuboring yoki QR ni skanerlating.
+          </li>
+          <li>
+            <b>Butun sinfga bir yo'la:</b> <b>«Havolalarni chiqarish»</b> → sinf tanlanadi → har bola
+            uchun QR kartochka → <b>Chop etish</b> bilan kesib tarqating yoki skanerlating.
+          </li>
+          <li>
+            Havola yo'qolgan bo'lsa — qatordagi <b>«Yangilash»</b> eski linkni o'chirib yangisini beradi;
+            <b> «Bekor»</b> esa umuman yopadi. Havolalar bazada faqat maxfiy xesh bo'lib saqlanadi.
+          </li>
+        </ol>
+      </div>
+
       {birthdays.length > 0 ? (
         <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-rose-50 px-5 py-4">
           <span className="rounded-full bg-amber-100 p-2 text-amber-600">
@@ -385,14 +476,19 @@ export function StudentsClient({
                 <p className="text-xs text-slate-500">Jami {stats.length} nafar · ko'rinmoqda {filtered.length}</p>
               </div>
             </div>
-            <Button
-              onClick={() => {
-                setEditing(null);
-                setModalOpen(true);
-              }}
-            >
-              <Plus className="h-4 w-4" /> Yangi o'quvchi
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => setLinksModal(true)}>
+                <QrCode className="h-4 w-4" /> Havolalarni chiqarish
+              </Button>
+              <Button
+                onClick={() => {
+                  setEditing(null);
+                  setModalOpen(true);
+                }}
+              >
+                <Plus className="h-4 w-4" /> Yangi o'quvchi
+              </Button>
+            </div>
           </div>
 
           {/* Qidiruv + sinf bo'yicha filtr — telefonda ham qulay */}
@@ -594,18 +690,37 @@ export function StudentsClient({
         <StudentForm
           key={editing?.id ?? "new"}
           student={editing ?? undefined}
-          onDone={(linkUrl) => {
+          onDone={(link) => {
             setModalOpen(false);
-            if (linkUrl) {
-              setIssued({ name: editing?.full_name ?? "O'quvchi", url: linkUrl });
+            if (link) {
+              setIssued({ name: editing?.full_name ?? "O'quvchi", url: link.url, qr: link.qr || null });
             }
           }}
         />
       </Modal>
 
       {issued ? (
-        <LinkSuccessDialog studentName={issued.name} linkUrl={issued.url} onClose={() => setIssued(null)} />
+        <LinkSuccessDialog
+          studentName={issued.name}
+          linkUrl={issued.url}
+          qr={issued.qr}
+          onClose={() => setIssued(null)}
+        />
       ) : null}
+
+      {linksModal ? (
+        <ClassLinkIssueModal
+          classes={classes}
+          defaultClass={classFilter}
+          onClose={() => setLinksModal(false)}
+          onIssued={(res) => {
+            setLinksModal(false);
+            setLinksResult(res);
+          }}
+        />
+      ) : null}
+
+      {linksResult ? <ClassLinkCardsView result={linksResult} onClose={() => setLinksResult(null)} /> : null}
 
       <Modal open={deleting !== null} title="O'chirishni tasdiqlash" onClose={() => setDeleting(null)}>
         <p className="text-sm text-slate-600">
@@ -623,5 +738,185 @@ export function StudentsClient({
         </div>
       </Modal>
     </>
+  );
+}
+
+// ------------------- Sinf uchun havola chiqarish (QR kartochkalar) ----------
+
+function ClassLinkIssueModal({
+  classes,
+  defaultClass,
+  onClose,
+  onIssued,
+}: {
+  classes: string[];
+  defaultClass: string;
+  onClose: () => void;
+  onIssued: (res: ClassLinksView) => void;
+}) {
+  const [cls, setCls] = useState(defaultClass !== "all" ? defaultClass : (classes[0] ?? ""));
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function go() {
+    if (!cls) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await actionIssueClassLinks(cls);
+        if (!res.ok) {
+          setError(res.error ?? "Havolalarni chiqarib bo'lmadi.");
+          return;
+        }
+        onIssued({
+          className: res.className ?? cls,
+          issued: res.issued ?? [],
+          alreadyActive: res.alreadyActive ?? 0,
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Havolalarni chiqarib bo'lmadi.");
+      }
+    });
+  }
+
+  return (
+    <Modal open title="Sinf uchun havolalar chiqarish" onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-xs leading-relaxed text-slate-500">
+          Tanlangan sinfdagi <b>havolasi yo'q</b> hamma o'quvchiga shaxsiy o'yin havolasi beriladi
+          (QR kartochka shaklida). Allaqachon faol havolasi bor o'quvchilarga <b>tegilmaydi</b> —
+          ularning eski havolalari ishlashda qoladi.
+        </p>
+        <Field label="Sinf">
+          <select
+            value={cls}
+            onChange={(e) => setCls(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none"
+            aria-label="Sinf tanlash"
+          >
+            {classes.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p> : null}
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Bekor qilish
+          </Button>
+          <Button onClick={go} disabled={pending || !cls}>
+            <QrCode className="h-4 w-4" /> {pending ? "Chiqarilmoqda..." : "Chiqarish"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+const SHARE_BTN =
+  "inline-flex h-9 min-w-[36px] items-center justify-center gap-1 rounded-md px-2 text-[11px] font-medium";
+
+function ClassLinkCardsView({ result, onClose }: { result: ClassLinksView; onClose: () => void }) {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copy = async (id: string, url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(id);
+      window.setTimeout(() => setCopiedId(null), 2500);
+    } catch {
+      window.prompt("Havolani qo'lda nusxalang:", url);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm">
+      <style dangerouslySetInnerHTML={{ __html: PRINT_CSS }} />
+      <div className="mx-auto w-full max-w-4xl rounded-2xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <h3 className="text-base font-semibold text-slate-900">
+            QR kartochkalar — {result.className}
+          </h3>
+          <div className="classlink-screen-only flex items-center gap-2">
+            <Button variant="secondary" onClick={() => window.print()}>
+              <Printer className="h-4 w-4" /> Chop etish
+            </Button>
+            <Button variant="secondary" onClick={onClose}>
+              Yopish
+            </Button>
+          </div>
+        </div>
+
+        <div className="classlink-screen-only space-y-3 px-5 pt-4">
+          <p className="rounded-lg bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+            ⚠️ Bu havolalar <b>faqat HOZIR</b> ko'rinadi (bazada faqat maxfiy xesh saqlanadi).
+            Nusxalash / WhatsApp / Telegram / chop etishni shu oynada bajaring. Keyinroq kerak
+            bo'lsa — qatordagi «Yangilash» yangi havola beradi.
+          </p>
+          {result.alreadyActive > 0 ? (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              {result.alreadyActive} o'quvchida allaqachon faol havola bor — ularga tegilmadi
+              (eski havolalari ishlashda qolgan).
+            </p>
+          ) : null}
+          {result.issued.length === 0 ? (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2.5 text-xs text-emerald-800">
+              Bu sinfda havolasi yo'q o'quvchi yo'q — hammada faol havola bor.
+            </p>
+          ) : null}
+        </div>
+
+        {result.issued.length > 0 ? (
+          <div className="classlink-print-area grid grid-cols-2 gap-4 p-5 sm:grid-cols-3">
+            {result.issued.map((c) => (
+              <div
+                key={c.studentId}
+                className="classlink-print-card rounded-xl border border-slate-200 p-3 text-center"
+              >
+                <p className="truncate text-sm font-bold text-slate-900">{c.fullName}</p>
+                <p className="text-[11px] text-slate-500">{result.className} · o'yin portali</p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={c.qr} alt={`${c.fullName} — o'yin havolasi QR`} className="mx-auto my-2 h-36 w-36" />
+                <div className="classlink-screen-only flex items-center justify-center gap-1.5">
+                  <button
+                    onClick={() => copy(c.studentId, c.url)}
+                    className={`${SHARE_BTN} border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50`}
+                    title="Havolani nusxalash"
+                  >
+                    {copiedId === c.studentId ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copiedId === c.studentId ? "Nusxalandi" : "Nusxa"}
+                  </button>
+                  <a
+                    href={waHref(c.url)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`${SHARE_BTN} bg-emerald-600 text-white hover:bg-emerald-700`}
+                    title="WhatsApp'da yuborish"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" /> WA
+                  </a>
+                  <a
+                    href={tgHref(c.url)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`${SHARE_BTN} bg-sky-500 text-white hover:bg-sky-600`}
+                    title="Telegramda yuborish"
+                  >
+                    <Send className="h-3.5 w-3.5" /> TG
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        <p className="classlink-screen-only border-t border-slate-100 px-5 py-3 text-[11px] text-slate-500">
+          Kartochkalarni chop etib kesing — har bolaga O'Z kartochkasi. Havola ism/telefonsiz:
+          taxmin qilib topib bo'lmaydi. Yo'qolgan bo'lsa ro'yxatda «Yangilash» bosing.
+        </p>
+      </div>
+    </div>
   );
 }

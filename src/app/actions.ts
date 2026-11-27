@@ -18,6 +18,7 @@ import {
   type TeacherSession,
 } from "@/lib/auth";
 import { issueStudentLink, revokeStudentLink } from "@/lib/portal/store";
+import { issueClassLinks, qrDataUrl } from "@/lib/portal/links";
 import { getBaseUrl } from "@/lib/base-url";
 import type {
   AttendanceStatus,
@@ -64,7 +65,7 @@ async function requireAccessFor(studentClass?: string | null): Promise<TeacherSe
 
 // --------------------------------- Students --------------------------------
 
-export async function saveStudent(formData: FormData): Promise<{ linkUrl: string | null }> {
+export async function saveStudent(formData: FormData): Promise<{ linkUrl: string | null; qr: string | null }> {
   await requireTeacherAction();
   const input: StudentInput = {
     full_name: req(str(formData.get("full_name")), "F.I.Sh"),
@@ -78,7 +79,7 @@ export async function saveStudent(formData: FormData): Promise<{ linkUrl: string
     await requireAccessFor(input.class_name);
     await repo.updateStudent(id, input);
     refresh();
-    return { linkUrl: null };
+    return { linkUrl: null, qr: null };
   }
 
   await repo.createStudent(input);
@@ -95,13 +96,13 @@ export async function saveStudent(formData: FormData): Promise<{ linkUrl: string
     if (created) {
       const baseUrl = await getBaseUrl();
       const link = await issueStudentLink(created.id, baseUrl);
-      return { linkUrl: link.url };
+      return { linkUrl: link.url, qr: await qrDataUrl(link.url) };
     }
   } catch {
     // Link yaratishda xato — o'quvchi baribir saqlandi; link keyinroq
     // ro'yxatdan "Yangilash" bilan beriladi
   }
-  return { linkUrl: null };
+  return { linkUrl: null, qr: null };
 }
 
 export async function deleteStudent(id: string): Promise<void> {
@@ -126,7 +127,7 @@ async function findStudent(id: string): Promise<Student | null> {
 
 export async function actionIssueStudentLink(
   studentId: string
-): Promise<{ ok: boolean; url?: string; error?: string }> {
+): Promise<{ ok: boolean; url?: string; qr?: string; error?: string }> {
   try {
     const student = await findStudent(studentId);
     if (!student) throw new Error("O'quvchi topilmadi.");
@@ -134,7 +135,7 @@ export async function actionIssueStudentLink(
     const baseUrl = await getBaseUrl();
     const link = await issueStudentLink(studentId, baseUrl);
     revalidatePath("/students");
-    return { ok: true, url: link.url };
+    return { ok: true, url: link.url, qr: await qrDataUrl(link.url) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Linkni berishda xatolik." };
   }
@@ -142,7 +143,7 @@ export async function actionIssueStudentLink(
 
 export async function actionRotateStudentLink(
   studentId: string
-): Promise<{ ok: boolean; url?: string; error?: string }> {
+): Promise<{ ok: boolean; url?: string; qr?: string; error?: string }> {
   try {
     const student = await findStudent(studentId);
     if (!student) throw new Error("O'quvchi topilmadi.");
@@ -151,7 +152,7 @@ export async function actionRotateStudentLink(
     // Yangilash = eski token o'lgan + yangi token bir marta ko'rsatiladi
     const link = await issueStudentLink(studentId, baseUrl);
     revalidatePath("/students");
-    return { ok: true, url: link.url };
+    return { ok: true, url: link.url, qr: await qrDataUrl(link.url) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Linkni yangilashda xatolik." };
   }
@@ -169,6 +170,28 @@ export async function actionRevokeStudentLink(
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Linkni bekor qilishda xatolik." };
+  }
+}
+
+/** Butun sinf uchun havolalar bir vaqtda (QR kartochkalar bilan).
+ *  Faqat link-siz o'quvchilarga beriladi; faol linklar qayta yozilmaydi. */
+export async function actionIssueClassLinks(
+  className: string
+): Promise<{
+  ok: boolean;
+  className?: string;
+  issued?: Array<{ studentId: string; fullName: string; url: string; qr: string }>;
+  alreadyActive?: number;
+  error?: string;
+}> {
+  try {
+    const session = await requireTeacherAction();
+    const baseUrl = await getBaseUrl();
+    const res = await issueClassLinks(session, className, baseUrl);
+    refresh();
+    return { ok: true, ...res };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Havolalarni chiqarishda xatolik." };
   }
 }
 
