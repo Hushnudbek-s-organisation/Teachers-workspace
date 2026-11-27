@@ -4,12 +4,11 @@
 // O'qituvchi menyusi — tushunarli GURUHLARGA ajratilgan.
 // Mavjud sahifalar va URL'lar SAQLANGAN: /, /students, /parents, /teachers,
 // /schedule, /daily, /books, /games, /games/stats, /classroom, /analytics,
-// /setup. Sessiya o'qituvchisi tepada ko'rinadi, "Chiqish" tugmasi bor.
+// /setup. Yagona o'qituvchi "Muxlisa" tepada ko'rinadi (login/chiqish YO'Q).
 // ============================================================================
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { usePathname } from "next/navigation";
 import {
   BarChart3,
   BookOpen,
@@ -21,13 +20,11 @@ import {
   GraduationCap,
   LayoutDashboard,
   LifeBuoy,
-  LogOut,
   School,
   Users,
   UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { actionLogout } from "@/app/auth-actions";
 
 interface NavItem {
   href: string;
@@ -86,19 +83,15 @@ function activeHref(pathname: string): string | null {
   return matches.sort((a, b) => b.length - a.length)[0] ?? null;
 }
 
-function NavLinks({ orientation, session }: { orientation: "vertical" | "horizontal"; session: { email: string; role: string } | null }) {
+function NavLinks({
+  orientation,
+  session,
+}: {
+  orientation: "vertical" | "horizontal";
+  session: { displayName: string; role: string } | null;
+}) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
   const current = activeHref(pathname);
-
-  const logout = () => {
-    startTransition(async () => {
-      await actionLogout();
-      router.push("/login");
-      router.refresh();
-    });
-  };
 
   return (
     <>
@@ -140,18 +133,8 @@ function NavLinks({ orientation, session }: { orientation: "vertical" | "horizon
       </nav>
       {orientation === "vertical" && session ? (
         <div className="mx-3 mb-2 rounded-lg bg-slate-800/60 px-3 py-2.5">
-          <p className="truncate text-xs font-medium text-slate-200">{session.email}</p>
-          <p className="text-[10px] text-slate-400">
-            {session.role === "admin" ? "Administrator" : "O'qituvchi"}
-          </p>
-          <button
-            onClick={logout}
-            disabled={pending}
-            className="mt-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            {pending ? "Chiqilmoqda..." : "Chiqish"}
-          </button>
+          <p className="truncate text-sm font-semibold text-slate-100">{session.displayName}</p>
+          <p className="text-[10px] text-slate-400">Ustoz · barcha sinflar</p>
         </div>
       ) : null}
     </>
@@ -163,7 +146,7 @@ export function Sidebar({
   session,
 }: {
   mode: "supabase" | "demo";
-  session: { email: string; role: string } | null;
+  session: { displayName: string; role: string } | null;
 }) {
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto bg-slate-900 md:flex">
@@ -202,18 +185,7 @@ export function Sidebar({
   );
 }
 
-export function MobileNav({ session = null }: { session?: { email: string; role: string } | null }) {
-  const [pending, startTransition] = useTransition();
-  const router = useRouter();
-
-  const logout = () => {
-    startTransition(async () => {
-      await actionLogout();
-      router.push("/login");
-      router.refresh();
-    });
-  };
-
+export function MobileNav({ session = null }: { session?: { displayName: string; role: string } | null }) {
   return (
     <div className="border-b border-slate-800 bg-slate-900 py-2 md:hidden">
       <div className="mb-2 flex items-center justify-between px-4 pt-1">
@@ -222,14 +194,9 @@ export function MobileNav({ session = null }: { session?: { email: string; role:
           <span className="text-sm font-bold text-white">Teachers Workspace</span>
         </div>
         {session ? (
-          <button
-            onClick={logout}
-            disabled={pending}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-red-400 disabled:opacity-50"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            Chiqish
-          </button>
+          <span className="rounded-md bg-slate-800 px-2 py-1 text-xs font-medium text-slate-200">
+            {session.displayName}
+          </span>
         ) : null}
       </div>
       <NavLinks orientation="horizontal" session={session ?? null} />
