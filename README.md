@@ -15,7 +15,7 @@ Teacher & Admin Dashboard for a school management platform:
 | **`src/app/classroom`** | **Sinf bilan o'ynash** — 🎡 charxpalak, 🏆 guruhlar viktorinasi (Kahoot uslubida), 🎟 bingo kartalari (chop etish) |
 | **`src/lib/books/multiplayer.ts` + `src/components/books/Multiplayer*`** | **Bir qurilmada 1/2/3 kishi o'ynash** — bo'lingan ekran (portrait/landscape), har o'yinchiga har xil savol, «savollar soni» yoki «vaqt bo'yicha» rejim |
 | **`src/app/games/stats`** | **O'yinlar statistikasi** — saqlangan natijalar: o'yinchilar, o'yinlar va turlar kesimida, oxirgi natijalar (filtr bilan) |
-| **`src/lib/auth-core.ts` + `src/lib/auth.ts`** | **O'qituvchi kirish** — cookie sessiya, scrypt parollar, admin/o'qituvchi rollari, sinf darajasidagi ruxsatlar; barcha sahifa/action/API himoyalangan |
+| **`src/lib/auth.ts`** | **Yagona o'qituvchi sessiyasi** — login yo'q, hamma sahifa ochiq; yagona o'qituvchi «Muxlisa» (barcha sinflar) |
 | **`src/lib/portal/*` + `src/app/o/*`** | **O'quvchi portali** — shaxsiy havola bilan parolsiz kirish, katta tugmalar, 3-sinf mashq o'yinlari, do'stim bilan o'yin (2 qurilma), server tekshiradigan natijalar |
 
 ---
@@ -29,10 +29,10 @@ npm run dev          # http://localhost:3000
 
 Agar `.env.local` da Supabase kalitlari **bo'lmasa**, ilova avtomatik **Demo rejimi**ga
 o'tadi: xotiradagi realistik namoyish ma'lumotlari bilan to'liq CRUD va grafiklar
-ishlaydi (server qayta ishga tushganda yangilanadi). Demo rejimida sahifalar
-**parolsiz ochiladi** (avtomatik demo admin); istasangiz `/login` →
-**ustoz@demo.uz** / **demo1234**. Supabase ulangan production'da esa login
-MAJBURIY — hisoblar `/setup-access` da birinchi administrator sifatida yaratiladi.
+ishlaydi (server qayta ishga tushganda yangilanadi). **Login olib tashlangan** —
+sayt shaxsiy: sahifalar to'g'ridan-to'g'ri ochiladi, yagona o'qituvchi **Muxlisa**
+(barcha sinflar). O'quvchi portali havolalari baribir maxfiy (token bazada faqat
+xesh bo'lib saqlanadi).
 
 ## 🔌 Supabase'ni ulash (real ma'lumotlar)
 
@@ -124,18 +124,15 @@ render"** + `digest`), endi taxmin qilish shart emas:
 
 ---
 
-# 🔐 O'qituvchi kirish va xavfsizlik
+# 🔐 Kirish va xavfsizlik
 
-- **`/login`** — email + parol (scrypt bilan hash'lanadi, cookie sessiya 14 kun).
-  Birinchi hisob **admin** bo'ladi; keyingilari o'qituvchi.
-- **`/setup-access`** — hisoblar hali yo'q bo'lsa, birinchi administratorni yaratish
-  sahifasi (xavfsiz sozlash yo'li — mavjud qatorlar o'qituvchiga AVTOMATIK
-  bog'lanmaydi; admin o'z sinflarini o'zi tanlaydi).
-- **Admin** barcha sinflarni ko'radi; **o'qituvchi** faqat o'zi biriktirilgan
-  sinflarni (`/teachers` sahifasidan biriktiriladi, admin o'zgartiradi).
-- Himoya qatlamlari: dashboard sahifalari (`requireTeacher`), server action'lar
-  (`requireTeacherAction`), `/api/*` (401), o'quvchi ma'lumoti (`canAccessStudent`).
-  Yashirin menyu yoki anon Supabase siyosatlariga tayanilmaydi.
+- **Login olib tashlangan** (foydalanuvchi tanlovi): sayt shaxsiy — hamma sahifa
+  to'g'ridan-to'g'ri ochiladi, yagona o'qituvchi **Muxlisa** (barcha sinflar).
+  Eski `/login` va `/setup-access` manzillari `/` ga yo'naltiriladi.
+- **O'quvchi portali baribir maxfiy**: har havola tasodifiy token, bazada FAQAT
+  SHA-256 xesh saqlanadi — linkini bilmasa hech kim o'quvchi sahifasiga kira olmaydi.
+- `auth-core.ts`da hisob/parol (scrypt) funksiyalari saqlangan — kelajakda login
+  qayta qo'shilishi kerak bo'lsa tayyor.
 
 # 📱 O'quvchi portali (`/o/...`)
 
