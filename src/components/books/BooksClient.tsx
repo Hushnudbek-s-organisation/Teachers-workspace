@@ -27,7 +27,7 @@ import {
   actionDeleteBook,
   actionFinishUpload,
   actionStartUpload,
-} from "@/app/books/actions";
+} from "@/app/(dashboard)/books/actions";
 import { Badge, Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
 import {
   DEFAULT_GRADE,

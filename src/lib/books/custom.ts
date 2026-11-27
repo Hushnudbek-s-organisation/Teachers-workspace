@@ -27,6 +27,11 @@ export interface CustomGame extends Game {
   bookId?: string;
   topicId?: string;
   shareCode?: string;
+  /**
+   * O'quvchi portali ga ulashish (default true). false bo'lsa o'yin
+   * faqat o'qituvchi uchun — o'quvchilarga avtomatik ochilmaydi.
+   */
+  forStudents?: boolean;
 }
 
 async function readAll(): Promise<CustomGame[]> {
@@ -81,6 +86,8 @@ export interface CustomGameInput {
   topicId?: string;
   /** O'yin manbasi haqida izoh (o'qituvchi kiritadi) */
   note?: string;
+  /** O'quvchi portali ga chiqarish (default true — "Faqat sinf uchun" uchun false) */
+  forStudents?: boolean;
 }
 
 export async function createCustomGame(input: CustomGameInput): Promise<CustomGame> {
@@ -104,6 +111,7 @@ export async function createCustomGame(input: CustomGameInput): Promise<CustomGa
     subject: input.subject,
     bookId: input.bookId,
     topicId: input.topicId,
+    forStudents: input.forStudents ?? true,
   };
 
   if (isSupabaseConfigured()) {
@@ -134,6 +142,7 @@ function mergeCustom(prev: CustomGame, patch: Partial<CustomGameInput>): CustomG
     items,
     bookId: patch.bookId ?? prev.bookId,
     topicId: patch.topicId ?? prev.topicId,
+    forStudents: patch.forStudents ?? prev.forStudents,
     builtFrom: patch.note ? { ...prev.builtFrom, note: patch.note } : prev.builtFrom,
   };
   return next;

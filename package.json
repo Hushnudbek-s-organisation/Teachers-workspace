@@ -14,7 +14,9 @@
     "test:books": "tsx scripts/test-book-engine.mts",
     "test:games": "tsx scripts/test-game-builder.mts",
     "ingest": "node scripts/ingest-pdf.mjs",
-    "test:supabase": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-supabase-path.mts"
+    "test:supabase": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-supabase-path.mts",
+    "test:portal": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-portal.mts",
+    "test:flows": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-flows.mts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

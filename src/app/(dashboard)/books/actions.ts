@@ -8,6 +8,7 @@
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
+import { requireTeacherAction } from "@/lib/auth";
 import { normalizeGrade, TEXT_PAGE_CHARS } from "@/lib/config";
 import type { BookPage } from "@/lib/books/segment";
 import type { GameResult, GameType, SubjectKey } from "@/lib/books/types";
@@ -32,6 +33,7 @@ export interface UploadMeta {
 }
 
 export async function actionStartUpload(meta: UploadMeta): Promise<{ uploadId: string }> {
+  await requireTeacherAction();
   const uploadId = startUpload({
     title: meta.title,
     grade: meta.grade,
@@ -54,6 +56,7 @@ export async function actionAppendPages(
 export async function actionFinishUpload(
   uploadId: string
 ): Promise<{ bookId: string; topics: number; games: number; strategy: string; notes: string[] }> {
+  await requireTeacherAction();
   const { book, report } = finishUpload(uploadId);
   await saveBook(book);
   revalidatePath("/books");
@@ -74,6 +77,7 @@ export async function actionCreateFromText(input: {
   text: string;
   fileName?: string;
 }): Promise<{ bookId: string; topics: number; games: number }> {
+  await requireTeacherAction();
   const text = input.text.replace(/\r\n?/g, "\n");
   // Matnni bir xil hajmdagi "sahifa"larga bo'lamiz
   const pages: BookPage[] = [];
@@ -101,6 +105,7 @@ export async function actionCreateFromText(input: {
 }
 
 export async function actionDeleteBook(bookId: string): Promise<{ ok: boolean }> {
+  await requireTeacherAction();
   const ok = await deleteBook(bookId);
   revalidatePath("/books");
   return { ok };
@@ -109,6 +114,7 @@ export async function actionDeleteBook(bookId: string): Promise<{ ok: boolean }>
 export async function actionSaveResult(
   result: Omit<GameResult, "id" | "createdAt">
 ): Promise<{ ok: boolean }> {
+  await requireTeacherAction();
   await saveResult(result);
   revalidatePath(`/books/${result.bookId}`);
   return { ok: true };
@@ -144,6 +150,7 @@ export interface SaveResultsOutcome {
 export async function actionSaveGameResults(
   entries: PlayerResultEntry[]
 ): Promise<SaveResultsOutcome> {
+  await requireTeacherAction();
   const list = Array.isArray(entries) ? entries.filter(Boolean) : [];
   const problems: string[] = [];
   let saved = 0;

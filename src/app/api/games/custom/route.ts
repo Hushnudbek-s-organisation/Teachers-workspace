@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { GAME_TYPES, type GameType, type SubjectKey } from "@/lib/books/types";
 import { createCustomGame, listCustomGames, normalizeItems, parseCustomItems } from "@/lib/books/custom";
 import { DEFAULT_SUBJECT, MAX_BULK_CUSTOM_GAMES, normalizeGrade } from "@/lib/config";
+import { getTeacherSession } from "@/lib/auth";
 
 // ============================================================================
 // POST /api/games/custom
@@ -70,6 +71,8 @@ async function createFromInput(input: GameInput) {
 }
 
 export async function GET() {
+  const session = await getTeacherSession();
+  if (!session) return NextResponse.json({ error: "Ruxsat yo'q: avval tizimga kiring." }, { status: 401 });
   const games = await listCustomGames();
   return NextResponse.json({
     count: games.length,
@@ -87,6 +90,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await getTeacherSession();
+  if (!session) {
+    return NextResponse.json({ error: "Ruxsat yo'q: avval tizimga kiring." }, { status: 401 });
+  }
   try {
     const body = (await req.json()) as GameInput & { games?: GameInput[] };
 

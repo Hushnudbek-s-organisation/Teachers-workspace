@@ -168,7 +168,7 @@ export async function dbDeleteBook(id: string): Promise<boolean> {
 
 interface ResultRow {
   id: string;
-  book_id: string;
+  book_id: string | null;
   topic_id: string | null;
   topic_title: string | null;
   game_id: string;
@@ -180,12 +180,15 @@ interface ResultRow {
   total: number;
   time_sec: number;
   created_at: string;
+  mode: string | null;
+  percent: number | null;
+  source: string | null;
 }
 
 function rowToResult(row: ResultRow): GameResult {
   return {
     id: row.id,
-    bookId: row.book_id,
+    bookId: row.book_id ?? "",
     topicId: row.topic_id ?? "",
     topicTitle: row.topic_title ?? "",
     gameId: row.game_id,
@@ -249,6 +252,7 @@ interface CustomRow {
   note: string | null;
   book_id: string | null;
   topic_id: string | null;
+  for_students: boolean | null;
   created_at: string;
 }
 
@@ -268,6 +272,7 @@ function rowToCustom(row: CustomRow): CustomGame {
     subject: row.subject as CustomGame["subject"],
     bookId: row.book_id ?? undefined,
     topicId: row.topic_id ?? undefined,
+    forStudents: row.for_students ?? true,
   };
 }
 
@@ -308,6 +313,7 @@ export async function dbUpsertCustomGame(game: CustomGame): Promise<void> {
         note: game.builtFrom?.note ?? null,
         book_id: game.bookId ?? null,
         topic_id: game.topicId ?? null,
+        for_students: game.forStudents ?? true,
         created_at: game.createdAt ?? new Date().toISOString(),
       },
       { onConflict: "id" }

@@ -4,9 +4,11 @@ import { PageHeader } from "@/components/PageHeader";
 import { Badge, Card, EmptyState } from "@/components/ui";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { RecentResults } from "@/components/games/RecentResults";
+import { StatsFilters } from "@/components/games/StatsFilters";
 import { GAME_TYPES } from "@/lib/books/types";
 import { listBookMetas, listResults } from "@/lib/books/store";
 import { listCustomGames } from "@/lib/books/custom";
+import { repo } from "@/lib/repo";
 import { formatDuration, formatWhen, summarizeGameResults } from "@/lib/books/game-stats";
 
 export const dynamic = "force-dynamic";
@@ -14,44 +16,84 @@ export const dynamic = "force-dynamic";
 // ============================================================================
 // O'yinlar statistikasi
 //
-// Barcha saqlangan natijalar (kitob o'yinlari + o'qituvchi o'yinlari) shu
-// yerda jamlanadi. Bir qurilmada 2–3 kishi o'ynalganda har o'yinchining
-// natijasi ALOHIDA yozuv bo'lib saqlanadi, shuning uchun jadvalda har biri
-// o'z ismi bilan ko'rinadi.
+// Barcha saqlangan natijalar (kitob o'yinlari + o'qituvchi o'yinlari + PORTAL
+// o'yinlari) shu yerda avtomatik yangilanib turadi (force-dynamic + portal
+// saqlaganda revalidatePath). Filtrlar: sinf, o'quvchi, o'yin, sana.
+// Yakka / juftlik rejimi alohida ko'rsatiladi. Eski statistika saqlanadi.
 // ============================================================================
 
-export default async function GameStatsPage() {
-  const [results, books, customGames] = await Promise.all([
+export default async function GameStatsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const fClass = typeof sp.class === "string" ? sp.class : "";
+  const fStudent = typeof sp.student === "string" ? sp.student : "";
+  const fGame = typeof sp.game === "string" ? sp.game : "";
+  const fFrom = typeof sp.from === "string" ? sp.from : "";
+  const fTo = typeof sp.to === "string" ? sp.to : "";
+
+  const [results, books, customGames, students] = await Promise.all([
     listResults(),
     listBookMetas(),
     listCustomGames(),
+    repo.listStudents(),
   ]);
 
-  const summary = summarizeGameResults(results, 60);
+  const studentById = new Map(students.map((s) => [s.id, s]));
+  const resultsWithClass = results.map((r) => ({
+    r,
+    student: r.studentId ? studentById.get(r.studentId) : undefined,
+  }));
+
+  // ------------------------------ Filtrlash ------------------------------
+  const filtered = resultsWithClass.filter(({ r, student }) => {
+    if (fClass && student?.class_name !== fClass) return false;
+    if (fStudent && r.studentId !== fStudent) return false;
+    if (fGame && r.gameId !== fGame && r.gameTitle !== fGame) return false;
+    if (fFrom && r.createdAt.slice(0, 10) < fFrom) return false;
+    if (fTo && r.createdAt.slice(0, 10) > fTo) return false;
+    return true;
+  });
+
+  const summary = summarizeGameResults(filtered.map((x) => x.r), 60);
   const bookTitle = (id: string) => books.find((b) => b.id === id)?.title;
 
   const rows = summary.recent.map((r) => {
     const meta = GAME_TYPES[r.gameType] ?? { label: r.gameType, emoji: "🎮" };
+    const student = r.studentId ? studentById.get(r.studentId) : undefined;
     return {
       id: r.id,
       when: formatWhen(r.createdAt),
       playerName: (r.studentName ?? "").trim() || "Mehmon",
       studentId: r.studentId ?? null,
+      classLabel: student?.class_name ?? "",
       gameTitle: r.gameTitle || bookTitle(r.bookId ?? "") || "O'yin",
       typeLabel: meta.label,
       emoji: meta.emoji,
       score: r.score,
       total: r.total,
-      percent: r.total ? Math.round((r.score / r.total) * 100) : 0,
+      percent: r.percent ?? (r.total ? Math.round((r.score / r.total) * 100) : 0),
       timeLabel: formatDuration(r.timeSec),
+      modeLabel: r.mode === "duo" ? "🤝 Juftlik" : r.mode === "solo" ? "👤 Yakka" : r.source === "portal" ? "👤 Yakka" : "",
     };
   });
+
+  // Filtr variantlari (faqat ko'rinadigan yozuvlardan)
+  const classOptions = [...new Set(students.map((s) => s.class_name))].sort().map((c) => ({ value: c, label: c }));
+  const studentOptions = [...studentById.values()]
+    .sort((a, b) => a.full_name.localeCompare(b.full_name, "uz"))
+    .map((s) => ({ value: s.id, label: `${s.full_name} (${s.class_name})` }));
+  const gameOptions = [...new Map(filtered.map(({ r }) => [r.gameId, { value: r.gameId, label: r.gameTitle }])).values()];
+
+  const isFiltered = Boolean(fClass || fStudent || fGame || fFrom || fTo);
 
   return (
     <>
       <PageHeader
         title="O'yinlar statistikasi"
-        description="Kitob va o'qituvchi o'yinlari bo'yicha saqlangan natijalar — o'quvchilar, o'yinlar va turlar kesimida"
+        description="Kitob, o'qituvchi va o'quvchi portali o'yinlari bo'yicha saqlangan natijalar — o'quvchi, sinf, o'yin va sana kesimida"
         action={
           <div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 sm:flex">
             <Gamepad2 className="h-4 w-4 text-indigo-600" />
@@ -60,12 +102,18 @@ export default async function GameStatsPage() {
         }
       />
 
+      <StatsFilters classes={classOptions} students={studentOptions} games={gameOptions} />
+
       {summary.plays === 0 ? (
         <Card>
           <EmptyState
             icon={<BarChart3 className="h-5 w-5" />}
-            title="Hozircha saqlangan natija yo'q"
-            description="O'yinni o'ynab, oxirida «Saqlash» tugmasini bosing — natija shu sahifada ko'rinadi. Bir qurilmada 2–3 kishi o'ynalsa, har o'yinchi alohida qator bo'lib tushadi."
+            title={isFiltered ? "Filtr bo'yicha natija yo'q" : "Hozircha saqlangan natija yo'q"}
+            description={
+              isFiltered
+                ? "Boshqa filtr tanlang yoki filtrlarni tozalang."
+                : "O'yinlar o'ynalganda natijalar AVTOMATIK saqlanadi va shu yerda ko'rinadi. O'quvchi portali o'yinlari ham shu yerda chiqadi."
+            }
           />
           <div className="flex justify-center gap-2 border-t border-slate-100 px-4 py-3">
             <Link
@@ -107,9 +155,9 @@ export default async function GameStatsPage() {
               tone="emerald"
             />
             <MetricCard
-              label="Ko'p kishilik yozuvlar"
+              label="Ism bilan saqlanganlar"
               value={String(summary.guest)}
-              hint="Ism bilan saqlangan (o'quvchi tanlanmagan)"
+              hint="O'quvchi tanlanmagan yozuvlar"
               icon={<Layers className="h-5 w-5" />}
               tone="violet"
             />
@@ -233,8 +281,7 @@ export default async function GameStatsPage() {
           <RecentResults rows={rows} />
 
           <p className="mt-4 text-center text-xs text-slate-400">
-            Bir qurilmada 2–3 kishi o'ynalganda har o'yinchining natijasi alohida yozuv bo'lib saqlanadi —
-            jadvalda har biri o'z ismi bilan ko'rinadi.
+            O'quvchi portali (/o/...) o'yinlari ham avtomatik shu yerda chiqadi: yakka va juftlik (do'stim bilan) rejimlari alohida belgilanadi.
           </p>
         </>
       )}

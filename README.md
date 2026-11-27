@@ -6,7 +6,8 @@ Teacher & Admin Dashboard for a school management platform:
 | Bo'lim | Nima bor |
 | --- | --- |
 | **`supabase/schema.sql`** | **To'liq o'rnatish** — ENUM'lar, 10 jadval (maktab + `books`/`custom_games`/`game_results`), 7 VIEW, 2 funksiya, 40 RLS siyosati. **Qayta run qilish xavfsiz** (`create if not exists`) |
-| **`supabase/seed.sql`** | Namoyish ma'lumotlari: 6 o'qituvchi, 8 o'quvchi, davomat/baholar, bugun tug'ilgan kuni bo'lgan o'quvchi, 1 namuna kitob (5 mavzu / 17 o'yin) va 4 ta o'qituvchi o'yini. **Qayta run qilish xavfsiz** |
+| **`supabase/schema-portal.sql`** | **Portal sxemasi** — `student_links` (faqat SHA-256 hash), `game_sessions` (3 soat TTL), `game_rooms` (2 soat TTL), `room_progress`, natijalarda `mode/percent/source`, `custom_games.for_students`. **Qayta run qilish xavfsiz** |
+| **`supabase/seed.sql`** | Namoyish ma'lumotlari: 6 o'qituvchi, 11 o'quvchi (3-sinf portal uchun 3 ta qo'shimcha), davomat/baholar, bugun tug'ilgan kuni bo'lgan o'quvchi, 1 namuna kitob (5 mavzu / 17 o'yin) va 4 ta o'qituvchi o'yini. **Qayta run qilish xavfsiz** |
 | **`src/app/*` + `src/components/*`** | **Task 2** — Students / Parents / Teachers / Schedule CRUD, kunlik davomat, uyga ketish, baholash, birthday alert |
 | **`src/app/page.tsx` + `src/app/analytics`** | **Task 3** — Recharts dashboard: KPI kartalar, haftalik davomat grafigi, fanlar kesimida baholar, dismissal pie, hisobotlar |
 | **`src/lib/books/*` + `src/app/books/*`** | **Kitob → O'yin** — o'qituvchi yuklagan darslikni (PDF/matn) o'qib mavzularga bo'ladi va har bir mavzudan o'yinlar yasaydi (sinf va fan o'qituvchi tanlaydi) |
@@ -14,6 +15,8 @@ Teacher & Admin Dashboard for a school management platform:
 | **`src/app/classroom`** | **Sinf bilan o'ynash** — 🎡 charxpalak, 🏆 guruhlar viktorinasi (Kahoot uslubida), 🎟 bingo kartalari (chop etish) |
 | **`src/lib/books/multiplayer.ts` + `src/components/books/Multiplayer*`** | **Bir qurilmada 1/2/3 kishi o'ynash** — bo'lingan ekran (portrait/landscape), har o'yinchiga har xil savol, «savollar soni» yoki «vaqt bo'yicha» rejim |
 | **`src/app/games/stats`** | **O'yinlar statistikasi** — saqlangan natijalar: o'yinchilar, o'yinlar va turlar kesimida, oxirgi natijalar (filtr bilan) |
+| **`src/lib/auth-core.ts` + `src/lib/auth.ts`** | **O'qituvchi kirish** — cookie sessiya, scrypt parollar, admin/o'qituvchi rollari, sinf darajasidagi ruxsatlar; barcha sahifa/action/API himoyalangan |
+| **`src/lib/portal/*` + `src/app/o/*`** | **O'quvchi portali** — shaxsiy havola bilan parolsiz kirish, katta tugmalar, 3-sinf mashq o'yinlari, do'stim bilan o'yin (2 qurilma), server tekshiradigan natijalar |
 
 ---
 
@@ -26,7 +29,9 @@ npm run dev          # http://localhost:3000
 
 Agar `.env.local` da Supabase kalitlari **bo'lmasa**, ilova avtomatik **Demo rejimi**ga
 o'tadi: xotiradagi realistik namoyish ma'lumotlari bilan to'liq CRUD va grafiklar
-ishlaydi (server qayta ishga tushganda yangilanadi).
+ishlaydi (server qayta ishga tushganda yangilanadi). Barcha sahifalar uchun kirish:
+`/login` → **ustoz@demo.uz** / **demo1234** (faqat demo rejimda; prod da hisoblar
+`/setup-access` da birinchi administrator sifatida yaratiladi).
 
 ## 🔌 Supabase'ni ulash (real ma'lumotlar)
 
@@ -53,13 +58,12 @@ ishlaydi (server qayta ishga tushganda yangilanadi).
    yo'lidan o'tishini (so'rovlarni ushlab) va yozilgan qatorlarni sxema qabul
    qilishini ko'rsatadi. Qo'shimcha: `npm i --no-save @electric-sql/pglite`.
 
-> **RLS:** sxemada `authenticated` role uchun to'liq CRUD politikalari bor (40 ta).
-> Ilovada hozircha login sahifasi yo'q — shuning uchun serverda
-> `SUPABASE_SERVICE_ROLE_KEY` ishlatiladi (kalit brauzerga chiqmaydi).
-> Login qo'shgach, `@supabase/ssr` + aniq rollarga asoslangan politikalarga o'ting.
-> Login qo'shmasdan, faqat anon kalit bilan ishlatmoqchi bo'lsangiz — `schema.sql`
-> 7-bo'limidagi tayyor `anon` siyosatlar blokini kommentdan chiqaring (ogohlantirish
-> o'sha yerda yozilgan: anon kalit egasi o'qish **va** yozish huquqiga ega bo'ladi).
+> **Xavfsizlik:** o'qituvchi autentifikatsiyasi SERVER tomonda — cookie sessiya +
+> scrypt parollar (`src/lib/auth-core.ts`); barcha dashboard sahifalari, server
+> action'lar va `/api/*` yo'llari `requireTeacher` / `requireTeacherAction` bilan
+> himoyalangan. DB yozishlari serverdan `SUPABASE_SERVICE_ROLE_KEY` bilan ketadi
+> (kalit brauzerga chiqmaydi); portal havolalari esa hash'langan token orqali
+> o'z chegarasida ishlaydi (`supabase/schema-portal.sql` — alohida portal sxemasi).
 
 ---
 
@@ -116,6 +120,70 @@ render"** + `digest`), endi taxmin qilish shart emas:
   uyga ketish pie chart'i, sinflar jadvali, oylik va o'quvchilar kesimidagi hisobotlar.
 - **Birthday alert** — bugun tug'ilgan kuni bo'lgan o'quvchilar dashboard, o'quvchilar
   va kunlik davomat sahifalarida 🎂 belgisi bilan ko'rinadi.
+
+---
+
+# 🔐 O'qituvchi kirish va xavfsizlik
+
+- **`/login`** — email + parol (scrypt bilan hash'lanadi, cookie sessiya 14 kun).
+  Birinchi hisob **admin** bo'ladi; keyingilari o'qituvchi.
+- **`/setup-access`** — hisoblar hali yo'q bo'lsa, birinchi administratorni yaratish
+  sahifasi (xavfsiz sozlash yo'li — mavjud qatorlar o'qituvchiga AVTOMATIK
+  bog'lanmaydi; admin o'z sinflarini o'zi tanlaydi).
+- **Admin** barcha sinflarni ko'radi; **o'qituvchi** faqat o'zi biriktirilgan
+  sinflarni (`/teachers` sahifasidan biriktiriladi, admin o'zgartiradi).
+- Himoya qatlamlari: dashboard sahifalari (`requireTeacher`), server action'lar
+  (`requireTeacherAction`), `/api/*` (401), o'quvchi ma'lumoti (`canAccessStudent`).
+  Yashirin menyu yoki anon Supabase siyosatlariga tayanilmaydi.
+
+# 📱 O'quvchi portali (`/o/...`)
+
+O'qituvchi **O'quvchilar** sahifasida har bir bola uchun **shaxsiy havola** beradi:
+
+- Havola ko'rinishi: `https://sayt.uz/o/<tasodifiy-token>` — ichida **ism, telefon,
+  tug'ilgan sana, oddiy ID YO'Q**; bazada faqat **SHA-256 hash** saqlanadi.
+- O'quvchi havolani ochadi — **parol so'ralmaydi**, katta kartalardan o'yin tanlaydi.
+- Katalog serverda avtomatik yig'iladi: darslik o'yinlari + o'qituvchi o'yinlari
+  (`forStudents=true`) + 3 ta yangi mashq o'yini (**«Mashq o'yinlari»** alohida
+  blokda: «Ko'paytirish zinasi», «So'z yasash», «Soatni top»). Yangi o'yin
+  qo'shilsa — ro'yxatga O'ZI chiqadi, kod yozish shart emas. Bingo kabi doska
+  vositalari portaldan yashirin (eski `/classroom` joyida qolgan).
+- Har o'yin: bitta qisqa yo'riqnoma, katta javob tugmalari, «Savol 2/5» progress,
+  to'g'ri/noto'g'ri **rang + ✅/❌ belgi** bilan, oxirida «Yana o'ynash». Vaqt
+  bosimi majburiy emas. Har o'ynashda savollar aralashadi (2 o'yinchi bir xonada
+  — bir xil savollar).
+- **Natijani server tasdiqlaydi**: javob kaliti brauzerga yuborilmaydi, ball
+  serverda hisoblanadi, har yakun `game_results` ga (student, game, score, total,
+  percent, time, mode) avtomatik yoziladi va «O'yin statistikasi»da darhol
+  ko'rinadi. Takroriy so'rov (tarmoq retry) yozuvni ikkilantirmaydi.
+- Havolani **yangilash** (eski havola o'ladi) yoki **bekor qilish** — O'quvchilar
+  sahifasida, har bir qator
+  🔗 tugmalari orqali.
+
+## 🤝 «Do'stim bilan o'ynash» (2 qurilma)
+
+1. O'quvchi portaldan «Do'stim bilan o'ynash» → **taklif havolasi** yasaladi
+   (`/o/duo/<kod>`, 2 soat yashaydi) va «Taklif linkini nusxalash» bilan beriladi.
+2. Do'st havolani o'z telefonidan ochadi, taxallus kiritadi → «Do'stni kutyapman»
+   → xona egasi «Boshlash» bosadi.
+3. Uchinchi qurilma qo'shilmaydi; do'st faqat **taxallusni** ko'radi (ism/telefon
+   emas). Ochiq chat yoki umumiy reyting yo'q.
+4. Sahifa yangilansa yoki tarmoq uzilsa — holat tiklanadi («Qayta ulanmoqda...»).
+5. Yakunda natija **har bir o'yinchining O'Z profiliga** yoziladi; sessiyasiz
+   mehmon natijasi HECH QAYSI o'quvchiga bog'lanmaydi (faqat taxallus bilan saqlanadi).
+
+**Vercel muhit o'zgaruvchilari:** `NEXT_PUBLIC_SITE_URL` (portal havolalari shu
+manzildan yasaladi) + 3 ta Supabase kaliti (yuqorida). Havolalarda ism/telefon
+yo'qligi uchun `NEXT_PUBLIC_SITE_URL` aniq ko'rsatilishi tavsiya etiladi.
+
+## Portal testlari
+
+```bash
+npm run test:portal    # 117 tekshiruv: havola xavfsizligi, ruxsatlar, portal o'yinlari, duo xonalar
+npm run test:flows     # 49 tekshiruv: to'liq oqimlar — qo'shish→link→o'yin→statistika, 2 qurilma, filtrlar
+npm run test:games     # o'yin dvigateli + ko'p kishilik
+npm run test:supabase  # Supabase yo'li (kitob→o'yin→natija)
+```
 
 ---
 
@@ -257,8 +325,10 @@ hisobini chiqaradi. Kitob hali yuklanmagan bo'lsa, shuni aytadi.
 | --- | --- | --- |
 | Maktab ma'lumotlari | `students`, `teachers`, ... | xotiradagi namoyish ma'lumotlari |
 | Yuklangan kitoblar | `books` jadvali (`topics` = jsonb) | `.data/books/*.json` (git'ga tushmaydi) |
-| O'yin natijalari | `game_results` jadvali | `.data/game-results.json` |
+| O'yin natijalari | `game_results` jadvali | xotira (portal + fayl `.data/game-results.json`) |
 | O'qituvchi o'yinlari | `custom_games` jadvali | `.data/custom-games.json` |
+| Portal havolalari | `student_links` (faqat hash) | xotira (`demo().links`) |
+| Portal sessiyalari/xonalar | `game_sessions` (3 soat) / `game_rooms` (2 soat) | xotira (`demo().sessions` / `demo().rooms`) |
 
 > **Vercel/read-only muhitda** fayl tizimi ishlamaydi — shuning uchun Supabase
 > kalitlarini qo'ying: `src/lib/books/db.ts` (Supabase qatlami) avtomatik yoqiladi,

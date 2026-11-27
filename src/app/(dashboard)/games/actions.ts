@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
+import { requireTeacherAction } from "@/lib/auth";
 import type { GameItem, GameType, SubjectKey } from "@/lib/books/types";
 import {
   createCustomGame,
@@ -27,9 +28,12 @@ export interface SaveCustomInput {
   note?: string;
   bookId?: string;
   topicId?: string;
+  /** O'quvchi portali ga chiqarish (default true) */
+  forStudents?: boolean;
 }
 
 export async function actionSaveCustomGame(input: SaveCustomInput) {
+  await requireTeacherAction();
   let items: GameItem[] = input.items ?? [];
   if (!items.length && input.raw) {
     items = normalizeItems(parseCustomItems(input.raw, input.type).items, input.type);
@@ -45,6 +49,7 @@ export async function actionSaveCustomGame(input: SaveCustomInput) {
     groups: input.groups,
     items,
     note: input.note,
+    forStudents: input.forStudents,
     bookId: input.bookId,
     topicId: input.topicId,
   });
@@ -55,6 +60,7 @@ export async function actionSaveCustomGame(input: SaveCustomInput) {
 }
 
 export async function actionUpdateCustomGame(id: string, patch: SaveCustomInput) {
+  await requireTeacherAction();
   let items = patch.items ?? [];
   if (!items.length && patch.raw) {
     items = normalizeItems(parseCustomItems(patch.raw, patch.type).items, patch.type);
@@ -67,6 +73,7 @@ export async function actionUpdateCustomGame(id: string, patch: SaveCustomInput)
 }
 
 export async function actionDeleteCustomGame(id: string) {
+  await requireTeacherAction();
   const ok = await deleteCustomGame(id);
   revalidatePath("/games");
   return { ok };

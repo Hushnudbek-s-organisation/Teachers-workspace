@@ -38,7 +38,7 @@ import {
   actionSaveCustomGame,
   actionUpdateCustomGame,
   type SaveCustomInput,
-} from "@/app/games/actions";
+} from "@/app/(dashboard)/games/actions";
 import { normalizeItems, parseCustomItems } from "@/lib/books/custom-parse";
 import { DEFAULT_GRADE, DEFAULT_SUBJECT, GRADES, normalizeGrade } from "@/lib/config";
 
@@ -77,6 +77,9 @@ export function GameBuilder({ books, initial }: Props) {
   const [grade, setGrade] = useState(initial?.grade ?? DEFAULT_GRADE);
   const [difficulty, setDifficulty] = useState<1 | 2 | 3>(
     (initial as { difficulty?: 1 | 2 | 3 } | undefined)?.difficulty ?? 2
+  );
+  const [forStudents, setForStudents] = useState<boolean>(
+    (initial as { forStudents?: boolean } | undefined)?.forStudents ?? true
   );
   const [instructions, setInstructions] = useState(initial?.instructions ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
@@ -142,6 +145,7 @@ export function GameBuilder({ books, initial }: Props) {
         raw,
         items,
         note,
+        forStudents,
         bookId: bookId || undefined,
         topicId: topicId || undefined,
       };
@@ -254,6 +258,23 @@ export function GameBuilder({ books, initial }: Props) {
               <option value={3}>⭐⭐⭐ Qiyin</option>
             </Select>
           </Field>
+          <div className="sm:col-span-2">
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <input
+                type="checkbox"
+                checked={forStudents}
+                onChange={(e) => setForStudents(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-slate-800">O'quvchi portali ga chiqarish</span>
+                <span className="block text-xs text-slate-500">
+                  Belgilangan bo'lsa (standart), o'yin shu sinf o'quvchilarining shaxsiy link
+                  sahifasida avtomatik ko'rinadi. O'chirilsa — faqat siz uchun ("Faqat sinf uchun").
+                </span>
+              </span>
+            </label>
+          </div>
           <div className="sm:col-span-2">
             <Field label="Qo'shimcha izoh (o'yin kartida ko'rinadi)" hint="Masalan: 3-mavzu, uyga vazifa uchun">
               <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ixtiyoriy" />
