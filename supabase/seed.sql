@@ -29,7 +29,11 @@ insert into students (id, full_name, date_of_birth, class_name, phone) values
   ('22222222-2222-4222-8222-222222222206', 'Malika Tursunova',  '2013-12-02', '6-A', null),
   ('22222222-2222-4222-8222-222222222207', 'Ulug''bek Safarov',  '2011-02-14', '8-A', null),
   -- BUGUN tug'ilgan kuni (har qanday kunda ishlaydi):
-  ('22222222-2222-4222-8222-222222222208', 'Sarvinoz Abdullayeva', (current_date - interval '12 years')::date, '7-A', null)
+  ('22222222-2222-4222-8222-222222222208', 'Sarvinoz Abdullayeva', (current_date - interval '12 years')::date, '7-A', null),
+  -- 3-sinf o'quvchilari — O'YIN PORTALI uchun (shaxsiy link /o/... orqali kiradi):
+  ('22222222-2222-4222-8222-222222222301', 'Muhammad Azizov',   '2016-03-15', '3-A', null),
+  ('22222222-2222-4222-8222-222222222302', 'Nilufar Yo''ldosheva','2016-07-22', '3-A', null),
+  ('22222222-2222-4222-8222-222222222303', 'Doston Karimov',   '2016-09-30', '3-B', null)
 on conflict (id) do nothing;
 
 -- -------------------------------- OTA-ONALAR -------------------------------

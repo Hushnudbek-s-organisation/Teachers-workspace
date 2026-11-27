@@ -15,6 +15,7 @@ export interface RecentResultRow {
   when: string;
   playerName: string;
   studentId: string | null;
+  classLabel?: string;
   gameTitle: string;
   typeLabel: string;
   emoji: string;
@@ -22,6 +23,8 @@ export interface RecentResultRow {
   total: number;
   percent: number;
   timeLabel: string;
+  /** 👤 Yakka / 🤝 Juftlik (portal o'yinlari) */
+  modeLabel?: string;
 }
 
 export function RecentResults({ rows }: { rows: RecentResultRow[] }) {
@@ -94,8 +97,16 @@ export function RecentResults({ rows }: { rows: RecentResultRow[] }) {
                 <tr key={r.id} className="hover:bg-slate-50/70">
                   <td className="px-4 py-2">
                     <span className="font-medium text-slate-800">{r.playerName}</span>
+                    {r.classLabel ? (
+                      <span className="ml-1.5 text-[10px] text-slate-400">({r.classLabel})</span>
+                    ) : null}
                     {!r.studentId ? (
                       <span className="ml-1.5 text-[10px] text-slate-400">(ism bilan)</span>
+                    ) : null}
+                    {r.modeLabel ? (
+                      <span className="ml-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
+                        {r.modeLabel}
+                      </span>
                     ) : null}
                   </td>
                   <td className="max-w-[14rem] px-4 py-2">

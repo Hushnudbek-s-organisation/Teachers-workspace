@@ -3,6 +3,7 @@ import { ingestBook, listBookMetas, saveBook } from "@/lib/books/store";
 import type { BookPage } from "@/lib/books/segment";
 import type { SubjectKey } from "@/lib/books/types";
 import { normalizeGrade, TEXT_PAGE_CHARS } from "@/lib/config";
+import { getTeacherSession } from "@/lib/auth";
 
 // ============================================================================
 // POST /api/books/ingest
@@ -23,6 +24,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const session = await getTeacherSession();
+  if (!session) return NextResponse.json({ error: "Ruxsat yo'q: avval tizimga kiring." }, { status: 401 });
   const books = await listBookMetas();
   return NextResponse.json({
     count: books.length,
@@ -39,6 +42,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await getTeacherSession();
+  if (!session) {
+    return NextResponse.json({ error: "Ruxsat yo'q: avval tizimga kiring." }, { status: 401 });
+  }
   try {
     const body = (await req.json()) as {
       title?: string;

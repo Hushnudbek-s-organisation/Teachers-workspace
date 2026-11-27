@@ -426,5 +426,11 @@ export interface GameResult {
   total: number;
   timeSec: number;
   createdAt: string;
+  /** yakka | juftlik — portal o'yinlari uchun */
+  mode?: "solo" | "duo" | null;
+  /** 0..100 (portal server hisoblab yozadi) */
+  percent?: number | null;
+  /** portal | dashboard — qayerdan saqlangan */
+  source?: string | null;
 }
 

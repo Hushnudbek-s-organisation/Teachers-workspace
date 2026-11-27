@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { BookOpen, Check, Copy, Gamepad2, Pencil, Trash2 } from "lucide-react";
 import { Badge, Button, Card } from "@/components/ui";
 import { SUBJECTS, type SubjectKey } from "@/lib/books/types";
-import { actionDeleteCustomGame } from "@/app/games/actions";
+import { actionDeleteCustomGame } from "@/app/(dashboard)/games/actions";
 
 export interface CustomGameRow {
   id: string;

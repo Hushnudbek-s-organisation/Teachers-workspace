@@ -28,7 +28,7 @@ import {
   type PlayerOutcome,
 } from "@/lib/books/multiplayer";
 import { Button, Card, Select } from "@/components/ui";
-import { actionSaveGameResults } from "@/app/books/actions";
+import { actionSaveGameResults } from "@/app/(dashboard)/books/actions";
 import { PlayArea } from "./PlayArea";
 import { MultiplayerSetup, type StudentOption } from "./MultiplayerSetup";
 import { MultiplayerArena } from "./MultiplayerArena";

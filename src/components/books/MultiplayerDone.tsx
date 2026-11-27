@@ -23,7 +23,7 @@ import {
   type GameSetup,
   type PlayerOutcome,
 } from "@/lib/books/multiplayer";
-import { actionSaveGameResults } from "@/app/books/actions";
+import { actionSaveGameResults } from "@/app/(dashboard)/books/actions";
 import { Button, Select } from "@/components/ui";
 import type { StudentOption } from "./MultiplayerSetup";
 

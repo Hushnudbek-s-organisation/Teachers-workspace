@@ -28,6 +28,7 @@ import { segmentBook, type BookPage, type SegmentReport } from "./segment";
 import { cleanExtractedText, keyphrases } from "./text";
 import { BOOK_KEYWORD_POOL, MAX_SAVED_RESULTS, UPLOAD_SESSION_TTL_MS } from "../config";
 import { isSupabaseConfigured } from "../repo";
+import { listAllPortalResults, saveResultIdempotent } from "../portal/store";
 import {
   dbDeleteBook,
   dbGetBook,
@@ -315,7 +316,28 @@ export function finishUpload(id: string): { book: Book; report: SegmentReport } 
 
 export async function listResults(bookId?: string): Promise<GameResult[]> {
   if (isSupabaseConfigured()) return dbListResults(bookId);
-  const all = (await readJson<GameResult[]>(RESULTS_FILE)) ?? [];
+  // Demo rejim: dashboard (fayl) + portal (xotira) natijalari BIR joydan ko'rinadi
+  const fileRows = (await readJson<GameResult[]>(RESULTS_FILE)) ?? [];
+  const portalRows = await listAllPortalResults();
+  const mapped: GameResult[] = portalRows.map((r) => ({
+    id: r.id,
+    bookId: r.book_id ?? "",
+    topicId: r.topic_id ?? "",
+    topicTitle: r.topic_title ?? "",
+    gameId: r.game_id,
+    gameTitle: r.game_title,
+    gameType: r.game_type as GameResult["gameType"],
+    studentId: r.student_id,
+    studentName: r.student_name,
+    score: r.score,
+    total: r.total,
+    timeSec: r.time_sec,
+    createdAt: r.created_at,
+    mode: r.mode,
+    percent: r.percent,
+    source: r.source,
+  }));
+  const all = [...fileRows, ...mapped];
   const filtered = bookId ? all.filter((r) => r.bookId === bookId) : all;
   return filtered.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -330,15 +352,31 @@ export async function saveResult(result: Omit<GameResult, "id" | "createdAt">): 
     await dbSaveResult(full);
     return full;
   }
-  const all = (await readJson<GameResult[]>(RESULTS_FILE)) ?? [];
   const full: GameResult = {
     ...result,
     id: `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
     createdAt: new Date().toISOString(),
   };
-  all.push(full);
-  // Fayl cheksiz o'smasligi uchun oxirgi 2000 natijani saqlaymiz
-  await writeJson(RESULTS_FILE, all.slice(-MAX_SAVED_RESULTS));
+  // Demo rejim: portal bilan BIR umumiy ombor (xotira) — statistika sahifasi
+  // portal natijalarini ham ko'radi. Idempotent (xuddi shu id qayta yozilmaydi).
+  await saveResultIdempotent({
+    id: full.id,
+    book_id: full.bookId || null,
+    topic_id: full.topicId || null,
+    topic_title: full.topicTitle || null,
+    game_id: full.gameId,
+    game_title: full.gameTitle,
+    game_type: full.gameType,
+    student_id: full.studentId ?? null,
+    student_name: full.studentName ?? null,
+    score: full.score,
+    total: full.total,
+    time_sec: full.timeSec,
+    mode: full.mode ?? null,
+    percent: full.percent ?? (full.total ? Math.round((full.score / full.total) * 100) : 0),
+    source: "dashboard",
+    created_at: full.createdAt,
+  });
   return full;
 }
 
