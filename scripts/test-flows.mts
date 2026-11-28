@@ -37,7 +37,7 @@ import {
 import { issueClassLinks } from "../src/lib/portal/links.ts";
 import { buildPortalCatalog, portalInfoFor } from "../src/lib/portal/catalog.ts";
 import { listResults, listBookMetas } from "../src/lib/books/store.ts";
-import { listCustomGames } from "../src/lib/books/custom.ts";
+import { listCustomGames, createCustomGame } from "../src/lib/books/custom.ts";
 import { gradeFromClass } from "../src/lib/portal/catalog.ts";
 import type { TeacherSession } from "../src/lib/auth-core.ts";
 
@@ -374,6 +374,72 @@ await section("OQIM 4: sinf havolalari bir vaqtda (QR kartochkalar)", async () =
     denied = true;
   }
   check("O'qituvchi o'z sinfi bo'lmagan sinfga chiqa olmaydi", denied);
+});
+
+// ---------------------------------------------------------------------------
+await section("OQIM 5: do'stsiz boshlash + hamma o'qituvchi o'yinlari katalogda", async () => {
+  resetPortalDemoStore();
+  const s1 = await makeStudent("Dosstiz Oyinchi", "3-B");
+  const l1 = await issueStudentLink(s1.id, BASE);
+  const st = await resolveStudentByToken(l1.url.split("/o/")[1]!);
+
+  // Katalog: o'qituvchi o'yinlari HAMMASI ko'rinadi (sinf darajasidan qat'i nazar)
+  const g4 = await createCustomGame({
+    title: "Boshqa sinf uchun test",
+    type: "quiz",
+    subject: "matematika",
+    grade: 4,
+    items: [
+      { question: "6 x 6 = ?", options: ["30", "36", "42", "48"], answer: 1 } as never,
+      { question: "10 - 4 = ?", options: ["5", "6", "7", "8"], answer: 1 } as never,
+    ],
+  });
+  const cat = await buildPortalCatalog(portalInfoFor(st!));
+  check("Boshqa sinf uchun o'qituvchi o'yini katalogda KO'RINADI", cat.some((e) => e.key === `custom:${g4.id}`));
+
+  const d1 = await createCustomGame({
+    title: "Dublikat nom",
+    type: "quiz",
+    subject: "matematika",
+    grade: 3,
+    items: [{ question: "2 x 3 = ?", options: ["5", "6", "7", "8"], answer: 1 } as never],
+  });
+  const d2 = await createCustomGame({
+    title: "Dublikat nom",
+    type: "quiz",
+    subject: "matematika",
+    grade: 3,
+    items: [{ question: "3 x 3 = ?", options: ["6", "9", "12", "15"], answer: 1 } as never],
+  });
+  const cat2 = await buildPortalCatalog(portalInfoFor(st!));
+  const dups = cat2.filter((e) => e.title === "Dublikat nom");
+  check("Bir xil nomli 2 o'qituvchi o'yini IKKALASI ham ko'rinadi", dups.length === 2 && d1.id !== d2.id);
+
+  // Do'stsiz Boshlash: xona playing bo'ladi, do'st KEYIN qo'shiladi
+  const game = await resolveCatalogGameSafe("practice:kopaytirish-zinasi");
+  const room = await createRoom({
+    hostStudentId: s1.id,
+    hostName: "Aziz",
+    gameKey: "practice:kopaytirish-zinasi",
+    gameTitle: game.title,
+    gameType: "practice",
+    subject: "Mashq o'yinlari",
+    grade: 3,
+    questions: game.questions,
+  });
+  const started = await startRoom(room.code, "host", room.hostSecret);
+  check("Do'st QO'SHILMASA HAM 'Boshlash' ishlaydi (qotish yo'q)", started === true);
+
+  const joined = await joinRoom(room.code, "KechQush", null);
+  check("O'yin boshlangandan KEYIN qo'shilish ham ishlaydi", joined.ok === true);
+
+  const roomRow = await getRoom(room.code);
+  const secret = (joined as { ok: true; guestSecret: string }).guestSecret;
+  const ans = await recordRoomAnswer(room.code, "guest", secret, 0, roomRow!.answer_key[0]!);
+  check("Kech qo'shilgan mehmon javob yozadi", ans.ok === true && ans.correct === true);
+
+  const fin = await finishRoomPlayer(room.code, "guest", secret, 30, newAttemptId());
+  check("Kech qo'shilgan mehmon natijasi saqlanadi", fin.ok === true && fin.outcome!.saved === true);
 });
 
 async function resolveCatalogGameSafe(key: string) {

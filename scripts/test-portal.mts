@@ -569,8 +569,9 @@ await section("6. KATALOG AVTOMATIK — yangi o'yinlar o'zi chiqadi", async () =
   const unknownInfo = portalInfoFor(unknownStudent);
   check("Noma'lum sinf darajasi null", unknownInfo.grade === null);
   const unknownCatalog = await buildPortalCatalog(unknownInfo);
-  check("Noma'lum sinfda faqat MASHQ o'yinlari ko'rinadi", unknownCatalog.every((e) => e.practice === true));
-  check("Mashq o'yinlari baribir bor", unknownCatalog.length === 3);
+  check("Noma'lum sinfda KITOBLAR ko'rinmaydi", unknownCatalog.every((e) => !e.key.startsWith("book:")));
+  check("Noma'lum sinfda O'QITUVCHI o'yinlari ko'rinadi (talab: hamma o'yinlar)", unknownCatalog.some((e) => e.source === "custom"));
+  check("Mashq o'yinlari baribir bor", unknownCatalog.filter((e) => e.practice === true).length === 3);
 
   // Takror filtri: bir xil title+type ikki marta ko'rinmaydi
   await createCustomGame({
@@ -587,7 +588,21 @@ await section("6. KATALOG AVTOMATIK — yangi o'yinlar o'zi chiqadi", async () =
   });
   catalog = await buildPortalCatalog(info);
   const dupes = catalog.filter((e) => e.title === "Mevalarni juftlashtir");
-  check("Bir xil nomli o'yinlar takrorlanmaydi (dedupe)", dupes.length === 1);
+  check("Bir xil nomli o'qituvchi o'yinlari IKKALASI ham ko'rinadi (talab)", dupes.length === 2 && dupes[0]!.key !== dupes[1]!.key);
+
+  // Boshqa sinf uchun yasalgan o'qituvchi o'yini ham ko'rinadi (talab: hamma o'yinlar)
+  const otherGrade = await createCustomGame({
+    title: "Boshqa sinf o'yini",
+    type: "quiz",
+    subject: "matematika",
+    grade: 4,
+    items: [
+      { question: "5 x 5 = ?", options: ["20", "25", "30", "35"], answer: 1 } as never,
+      { question: "3 + 9 = ?", options: ["11", "12", "13", "14"], answer: 1 } as never,
+    ],
+  });
+  catalog = await buildPortalCatalog(info);
+  check("Boshqa sinf uchun o'qituvchi o'yini ham ko'rinadi", catalog.some((e) => e.key === `custom:${otherGrade.id}`));
 
   // Bingo kabi sinf formatlari portalga chiqmaydi
   await createCustomGame({

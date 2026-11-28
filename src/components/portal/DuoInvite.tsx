@@ -83,6 +83,8 @@ export function DuoInvite({ token, entry, onBack }: { token: string; entry: Cata
             setError("Xona bekor qilindi.");
             setPhase("error");
           }
+        } else {
+          setNetProblem(true);
         }
       } catch {
         if (alive) setNetProblem(true);
@@ -221,6 +223,12 @@ export function DuoInvite({ token, entry, onBack }: { token: string; entry: Cata
                 Do'stimni kutyapman... (bu ekran ochiq tursin)
               </p>
             )}
+            {!joined ? (
+              <p className="mt-1.5 text-[11px] text-slate-400">
+                Maslahat: do'stingiz qo'shilmasa ham «Boshlash» bosishingiz mumkin — u havolani ochib
+                qo'shilgach o'ynayveradi.
+              </p>
+            ) : null}
             {netProblem ? (
               <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">
                 ⚠ Ulanish uzildi — qayta ulanmoqda...
@@ -229,7 +237,6 @@ export function DuoInvite({ token, entry, onBack }: { token: string; entry: Cata
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 onClick={start}
-                disabled={!joined}
                 className="rounded-xl bg-emerald-600 px-7 py-3 text-base font-bold text-white hover:bg-emerald-700 disabled:opacity-40 min-h-[50px]"
               >
                 ▶ Boshlash
