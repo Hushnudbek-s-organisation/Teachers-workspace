@@ -1,4 +1,5 @@
 import "server-only";
+import { cached, invalidateCache } from "@/lib/cache";
 
 // ============================================================================
 // O'quvchi portali katalogi — SERVER tomonda yig'iladi.
@@ -82,16 +83,31 @@ function dedupeKey(title: string, type: string): string {
   return `${(title ?? "").toLowerCase().trim()}|${type}`;
 }
 
-/** O'quvchi uchun to'liq katalog (server component renderida ishlatiladi) */
+/** Katalog keshini tozalash (kitob/o'yin yozishlarida chaqiriladi) */
+export function invalidateCatalogCache(): void {
+  invalidateCache("portal:cat:");
+}
+
+/**
+ * O'quvchi uchun to'liq katalog (server component renderida ishlatiladi).
+ * TEZLIK: natija sinf darajasi bo'yicha 10 s keshlanadi — ko'p bolalar bir
+ * vaqtda ochsa server bir marta yig'iladi. Har qanday yozish amali (kitob
+ * saqlash, o'yin yaratish, o'yinni yopish/ochish) keshni DARHOL tozalaydi —
+ * eski ma'lumot ko'rinmaydi.
+ */
 export async function buildPortalCatalog(info: StudentPortalInfo): Promise<CatalogEntry[]> {
+  return cached(`portal:cat:${info.grade ?? "none"}`, 10_000, () => buildPortalCatalogUncached(info));
+}
+
+async function buildPortalCatalogUncached(info: StudentPortalInfo): Promise<CatalogEntry[]> {
   const entries: CatalogEntry[] = [];
   const seen = new Set<string>();
-  let closed: Set<string> | null = null;
-  try {
-    closed = await listClosedGameKeys();
-  } catch {
-    closed = new Set();
-  }
+  // TEZLIK: yopilganlar + o'qituvchi o'yinlari + kitob metalar BIR VAQTDA o'qiladi
+  const [closed, customGames, metas] = await Promise.all([
+    listClosedGameKeys().catch(() => new Set<string>()),
+    listCustomGames(),
+    info.grade === null ? Promise.resolve([] as BookMeta[]) : listBookMetas(),
+  ]);
 
   // ------------------------ Mashq o'yinlari (doim ko'rinadi) ------------------------
   for (const p of PRACTICE_GAMES) {
@@ -114,10 +130,7 @@ export async function buildPortalCatalog(info: StudentPortalInfo): Promise<Catal
   // Foydalanuvchi talabi: o'qituvchi yasagan barcha o'yinlar bolalarga
   // ko'rinadi (sinf darajasidan qat'i nazar). Cheklovlar faqat:
   // for_students=false («Faqat sinf uchun») va bingo (doska formati).
-  const customGames = (await listCustomGames()).filter(
-    (g) => g.forStudents !== false && g.type !== "bingo"
-  );
-  for (const game of customGames) {
+  for (const game of customGames.filter((g) => g.forStudents !== false && g.type !== "bingo")) {
     if (!portalQuestionsReady(game)) continue;
     if (closed?.has(`custom:${game.id}`)) continue;
     entries.push({
@@ -138,31 +151,32 @@ export async function buildPortalCatalog(info: StudentPortalInfo): Promise<Catal
   const grade = info.grade;
   if (grade === null) return entries; // sinf darajasi noma'lum — kitoblar OCHILMAYDI
 
-  // --------------------------- Kitob o'yinlari (grade mos) --------------------------
-  const books = (await listBookMetas()).filter((b) => b.grade === grade);
-  for (const book of books) {
-    const full = await getBook(book.id);
+  // ------------------- Kitob o'yinlari (grade mos) — PARALLEL -------------------
+  // TEZLIK: kitoblar birma-bir KETMA-KET emas, hamma kitob BIR VAQTDA o'qiladi
+  const books = metas.filter((b) => b.grade === grade);
+  const fullBooks = await Promise.all(books.map((b) => getBook(b.id)));
+  for (const full of fullBooks) {
     if (!full) continue;
     for (const topic of full.topics) {
       for (const game of topic.games) {
         if (game.type === "bingo") continue; // sinf formati — portalga chiqmaydi
-        if (closed?.has(`book:${book.id}:${topic.id}:${game.id}`)) continue;
+        if (closed?.has(`book:${full.id}:${topic.id}:${game.id}`)) continue;
         const key = dedupeKey(game.title, game.type);
         if (seen.has(key)) continue; // takror oldini olish
         if (!portalQuestionsReady(game)) continue;
         seen.add(key);
         entries.push({
-          key: `book:${book.id}:${topic.id}:${game.id}`,
+          key: `book:${full.id}:${topic.id}:${game.id}`,
           title: game.title,
           instructions: game.instructions || `Mavzu: ${topic.title}`,
           boardKind: boardKindFor(game),
           emoji: gameBoardEmoji(game.type),
-          subject: subjectLabel(book.subject),
-          subjectKey: book.subject,
+          subject: subjectLabel(full.subject),
+          subjectKey: full.subject,
           source: "book",
           practice: false,
           savollar: Math.min(game.items.length, 10),
-          origin: book.title,
+          origin: full.title,
         });
       }
     }

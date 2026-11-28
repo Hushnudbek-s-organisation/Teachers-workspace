@@ -64,6 +64,7 @@ export async function listClosedGameKeys(): Promise<Set<string>> {
 export async function closePortalGame(key: string): Promise<void> {
   if (!key) return;
   invalidateCache("portal:closed");
+  invalidateCache("portal:cat:");
   if (!isSupabaseConfigured()) {
     demo().closed.set(key, new Date().toISOString());
     return;
@@ -74,6 +75,7 @@ export async function closePortalGame(key: string): Promise<void> {
 export async function openPortalGame(key: string): Promise<void> {
   if (!key) return;
   invalidateCache("portal:closed");
+  invalidateCache("portal:cat:");
   if (!isSupabaseConfigured()) {
     demo().closed.delete(key);
     return;

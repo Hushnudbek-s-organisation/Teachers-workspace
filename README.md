@@ -234,9 +234,14 @@ bajarilmaguncha boshqa o'yin ochilmaydi.
   o'quvchilar ismlari bilan.
 
 **Sayt tezligi** — ko'p bolalar bir vaqtda o'ynasa: kitob/o'yin kataloglari,
-natijalar va yopilgan o'yinlar ro'yxati qisqa muddatli keshlanadi (har qanday
-yozish amali keshni darhol yangilaydi, eski ma'lumot ko'rinmaydi) va bazada
-o'quvchi+vaqt indeksi qo'shildi (migration v4 — pastdagi SQL).
+natijalar, yopilgan o'yinlar va javob tekshiruvlari ishlatiladigan ma'lumotlar
+qisqa muddatli keshlanadi (har qanday yozish amali keshni darhol yangilaydi,
+eski ma'lumot ko'rinmaydi). **Javob tekshirish** odatda 4 ta baza so'rovi
+o'rniga 1 taga tushdi (token/sessiya/progress keshlari + guarded yozuv —
+parallel holatda ham ball TO'G'RI hisoblanadi). Kitoblar bir vaqtda (parallel)
+o'qiladi va katalog sinf bo'yicha keshlanadi. Bazada o'quvchi+vaqt indeksi bor
+(migration v4). Qo'shimcha sozlama: Vercel funksiya regioni Supabase loyiha
+regioni bilan BIR XIL qilinsa (masalan, Frankfurt) har amal ~0,2–0,5 s tezlashadi.
 
 **Supabase migratsiyasi (v4)** — `supabase/schema-portal.sql` ni to'liq run
 qiling YOKI faqat `supabase/migration-v4-points-closed.sql` ni SQL Editor'da
