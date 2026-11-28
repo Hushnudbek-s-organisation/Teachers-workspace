@@ -180,6 +180,7 @@ function demo(): DemoStore {
 
 export function resetPortalDemoStore(): void {
   g.__portalDemoStore = undefined;
+  invalidateCache(); // testlar izolyatsiyasi: hamma TTL kesh tozalanadi
 }
 
 // ---------------------------------------------------------------------------
@@ -298,6 +299,7 @@ export async function issueStudentLink(studentId: string, baseUrl: string): Prom
     // Boshqa sessiyada parallel berilgan bo'lsa — unik indeks rad etadi
     throw new Error(`Link yaratishda xato: ${error.message}`);
   }
+  invalidateCache("portal:stu:");
   return { token, url: linkUrl(token, baseUrl), createdAt: now };
 }
 
@@ -317,6 +319,7 @@ export async function revokeStudentLink(studentId: string): Promise<boolean> {
     .eq("student_id", studentId)
     .eq("active", true)
     .select("id");
+  invalidateCache("portal:stu:");
   return (res.data?.length ?? 0) > 0;
 }
 
@@ -331,15 +334,19 @@ export async function resolveStudentByToken(token: string): Promise<Student | nu
     if (!row || !row.active) return null;
     return studentById(row.student_id);
   }
-  const res = await sb()
-    .from("student_links")
-    .select("student_id")
-    .eq("token_hash", tokenHash)
-    .eq("active", true)
-    .maybeSingle();
-  const linkId = (res.data as { student_id: string } | null)?.student_id;
-  if (!linkId) return null;
-  return studentById(linkId);
+  // TEZLIK: har javob tekshiruvida 2 ta ortiqcha so'rov ketmasligi uchun
+  // token → o'quvchi 60 s keshlanadi. Link bekor/yangilansa kesh DARHOL tozalanadi.
+  return cached(`portal:stu:${tokenHash}`, 60_000, async () => {
+    const res = await sb()
+      .from("student_links")
+      .select("student_id")
+      .eq("token_hash", tokenHash)
+      .eq("active", true)
+      .maybeSingle();
+    const linkId = (res.data as { student_id: string } | null)?.student_id;
+    if (!linkId) return null;
+    return studentById(linkId);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -391,12 +398,14 @@ export async function saveResultIdempotent(row: PortalResultRow): Promise<{ save
     d.results.set(row.id, row);
     invalidateCache("results:");
     invalidateCache("portal:results");
+    invalidateCache("portal:today:");
     return { saved: true };
   }
   const res = await sb().from("game_results").upsert(row, { onConflict: "id", ignoreDuplicates: true }).select("id");
   if ((res.data?.length ?? 0) > 0) {
     invalidateCache("results:");
     invalidateCache("portal:results");
+    invalidateCache("portal:today:");
   }
   // ignoreDuplicates + select → yangi qator qaytadi, mavjud bo'lsa bo'sh
   return { saved: (res.data?.length ?? 0) > 0 };
@@ -421,18 +430,21 @@ export async function studentTodayGameKeys(studentId: string): Promise<Set<strin
     }
     return keys;
   }
-  const res = await sb()
-    .from("game_results")
-    .select("game_id")
-    .eq("student_id", studentId)
-    .gte("created_at", since);
-  return new Set(((res.data ?? []) as Array<{ game_id: string }>).map((row) => row.game_id));
+  return cached(`portal:today:${studentId}`, 5_000, async () => {
+    const res = await sb()
+      .from("game_results")
+      .select("game_id")
+      .eq("student_id", studentId)
+      .gte("created_at", since);
+    return new Set(((res.data ?? []) as Array<{ game_id: string }>).map((row) => row.game_id));
+  });
 }
 
 /** STATISTIKANI TO'LIQ TOZALASH — hamma game_results o'chiriladi */
 export async function resetGameResults(): Promise<number> {
   invalidateCache("results:");
   invalidateCache("portal:results");
+  invalidateCache("portal:today:");
   if (!isSupabase()) {
     const d = demo();
     const n = d.results.size;
@@ -526,21 +538,23 @@ export async function getGameSession(id: string): Promise<SessionRow | null> {
     }
     return row;
   }
-  const res = await sb().from("game_sessions").select("*").eq("id", id).maybeSingle();
-  const row = res.data as
-    | (Omit<SessionRow, "expires_at" | "questions" | "answer_key"> & {
-        expires_at: string;
-        questions: ServerQuestion[];
-        answer_key: QuestionAnswer[];
-      })
-    | null;
-  if (!row) return null;
-  const parsed: SessionRow = {
-    ...row,
-    expires_at: new Date(row.expires_at).getTime(),
-  };
-  if (parsed.status === "active" && Date.now() > parsed.expires_at) parsed.status = "expired";
-  return parsed;
+  return cached(`portal:sess:${id}`, 60_000, async () => {
+    const res = await sb().from("game_sessions").select("*").eq("id", id).maybeSingle();
+    const row = res.data as
+      | (Omit<SessionRow, "expires_at" | "questions" | "answer_key"> & {
+          expires_at: string;
+          questions: ServerQuestion[];
+          answer_key: QuestionAnswer[];
+        })
+      | null;
+    if (!row) return null;
+    const parsed: SessionRow = {
+      ...row,
+      expires_at: new Date(row.expires_at).getTime(),
+    };
+    if (parsed.status === "active" && Date.now() > parsed.expires_at) parsed.status = "expired";
+    return parsed;
+  });
 }
 
 /** Javobni serverda TEKSHIRISH va sessiyaga yozish */
@@ -566,12 +580,30 @@ export async function checkSessionAnswer(
     return { correct, score, answered };
   }
 
-  await sb()
+  // TEZLIK: keshdan o'qilgan sessiya bilan guarded update — odatda 1 ta so'rov.
+  // Boshqa instansiya oraliqda yozgan bo'lsa (0 qator) — yangilab o'qib qayta hisoblaymiz.
+  const upd = await sb()
     .from("game_sessions")
     .update({ score, answered })
-    .eq("id", session.id);
-  session.score = score;
-  session.answered = answered;
+    .eq("id", session.id)
+    .eq("score", session.score)
+    .eq("answered", session.answered)
+    .select("id");
+  if ((upd.data?.length ?? 0) > 0) {
+    session.score = score;
+    session.answered = answered;
+    return { correct, score, answered };
+  }
+  invalidateCache(`portal:sess:${session.id}`);
+  const fresh = await getGameSession(session.id);
+  if (fresh) {
+    const score2 = fresh.score + (correct ? 1 : 0);
+    const answered2 = Math.min(fresh.total, Math.max(fresh.answered, qIndex + 1));
+    await sb().from("game_sessions").update({ score: score2, answered: answered2 }).eq("id", session.id);
+    fresh.score = score2;
+    fresh.answered = answered2;
+    return { correct, score: score2, answered: answered2 };
+  }
   return { correct, score, answered };
 }
 
@@ -586,6 +618,7 @@ export async function finishGameSession(
   timeSec: number,
   baseUrl: string
 ): Promise<SessionFinish> {
+  invalidateCache(`portal:sess:${session.id}`);
   if (session.status !== "active") {
     const existing = await getResultById(attemptId);
     return {
@@ -794,6 +827,7 @@ export async function createRoom(input: CreateRoomInput): Promise<CreatedRoom> {
     time_limit_min: row.time_limit_min,
   });
   if (error) throw new Error(`Xona yaratishda xato: ${error.message}`);
+  invalidateCache(`portal:room:${code}`);
   return {
     code,
     hostSecret,
@@ -815,27 +849,31 @@ export async function getRoom(code: string): Promise<RoomRow | null> {
     }
     return row;
   }
-  const res = await sb().from("game_rooms").select("*").eq("id", normalized).maybeSingle();
-  if (!res.data) return null;
-  const row = res.data as
-    | (Omit<RoomRow, "expires_at" | "questions" | "answer_key"> & {
-        expires_at: string;
-        questions: ServerQuestion[];
-        answer_key: QuestionAnswer[];
-      })
-    | null;
-  if (!row) return null;
-  const parsed: RoomRow = {
-    ...row,
-    end_mode: row.end_mode ?? "questions",
-    time_limit_min: row.time_limit_min ?? null,
-    winner_slot: row.winner_slot ?? null,
-    expires_at: new Date(row.expires_at).getTime(),
-  };
-  if (parsed.status !== "finished" && parsed.status !== "cancelled" && Date.now() > parsed.expires_at) {
-    parsed.status = "cancelled";
-  }
-  return parsed;
+  // TEZLIK: xona 5 s keshlanadi (polling so'rovlarida bazaga har safar murojaat
+  // qilmaslik uchun). Har qanday xona yozishi keshni darhol tozalaydi.
+  return cached(`portal:room:${normalized}`, 5_000, async () => {
+    const res = await sb().from("game_rooms").select("*").eq("id", normalized).maybeSingle();
+    if (!res.data) return null;
+    const row = res.data as
+      | (Omit<RoomRow, "expires_at" | "questions" | "answer_key"> & {
+          expires_at: string;
+          questions: ServerQuestion[];
+          answer_key: QuestionAnswer[];
+        })
+      | null;
+    if (!row) return null;
+    const parsed: RoomRow = {
+      ...row,
+      end_mode: row.end_mode ?? "questions",
+      time_limit_min: row.time_limit_min ?? null,
+      winner_slot: row.winner_slot ?? null,
+      expires_at: new Date(row.expires_at).getTime(),
+    };
+    if (parsed.status !== "finished" && parsed.status !== "cancelled" && Date.now() > parsed.expires_at) {
+      parsed.status = "cancelled";
+    }
+    return parsed;
+  });
 }
 
 /** Mehmon qo'shilishi — uchinchi o'yinchi QABUL QILINMAYDI */
@@ -872,8 +910,10 @@ export async function joinRoom(
     .select("id");
   // Boshqa sessiya bir vaqtda qo'shilgan bo'lsa — yangilanish bo'sh qaytadi
   if (res.error || (res.data?.length ?? 0) === 0) {
+    invalidateCache(`portal:room:${room.id}`);
     return { ok: false, error: "taken" };
   }
+  invalidateCache(`portal:room:${room.id}`);
   return { ok: true, guestSecret, room };
 }
 
@@ -894,6 +934,7 @@ export async function startRoom(code: string, slot: "host" | "guest", secret: st
     .update({ status: "playing", updated_at: room.updated_at })
     .eq("id", room.id)
     .eq("status", "waiting");
+  if (!error) invalidateCache(`portal:room:${room.id}`);
   return !error;
 }
 
@@ -947,11 +988,39 @@ export async function recordRoomAnswer(
   const prev = await getProgress(room.id, slot);
   const score = prev.score + (correct ? 1 : 0);
   const answered = Math.min(room.total, Math.max(prev.answered, qIndex + 1));
-  await upsertProgress(room.id, slot, { score, answered, done: false, attempt_id: prev.attempt_id });
-  return { ok: true, correct, score, answered };
+  if (!isSupabase()) {
+    await upsertProgress(room.id, slot, { score, answered, done: false, attempt_id: prev.attempt_id });
+    return { ok: true, correct, score, answered };
+  }
+  // TEZLIK: guarded update — odatda 1 ta so'rov (o'qish keshdan keldi).
+  // Satr yo'q (birinchi javob) yoki boshqa instansiya yozgan bo'lsa —
+  // yangilab o'qib qayta hisoblaymiz (natija har qanday holatda TO'G'RI).
+  const upd = await sb()
+    .from("game_room_progress")
+    .update({ score, answered, done: false, attempt_id: prev.attempt_id, updated_at: new Date().toISOString() })
+    .eq("room_id", room.id)
+    .eq("player", slot)
+    .eq("score", prev.score)
+    .select("player");
+  if ((upd.data?.length ?? 0) > 0) {
+    invalidateCache(`portal:prog:${room.id}:${slot}`);
+    return { ok: true, correct, score, answered };
+  }
+  const fresh = await getProgressFresh(room.id, slot);
+  const score2 = fresh.score + (correct ? 1 : 0);
+  const answered2 = Math.min(room.total, Math.max(fresh.answered, qIndex + 1));
+  await upsertProgress(room.id, slot, { score: score2, answered: answered2, done: false, attempt_id: fresh.attempt_id });
+  return { ok: true, correct, score: score2, answered: answered2 };
 }
 
 export async function getProgress(roomId: string, slot: "host" | "guest"): Promise<ProgressRow> {
+  if (!isSupabase()) return getProgressFresh(roomId, slot);
+  // TEZLIK: progress 3 s keshlanadi (polling + javob tekshiruvlari uchun)
+  return cached(`portal:prog:${roomId}:${slot}`, 3_000, () => getProgressFresh(roomId, slot));
+}
+
+/** Keshsiz o'qish (guarded yozuvdan keyingi qayta hisoblash uchun) */
+async function getProgressFresh(roomId: string, slot: "host" | "guest"): Promise<ProgressRow> {
   const key = `${roomId}:${slot}`;
   if (!isSupabase()) {
     return demo().progress.get(key) ?? emptyProgress(roomId, slot);
@@ -1002,6 +1071,7 @@ async function upsertProgress(
     },
     { onConflict: "room_id,player" }
   );
+  invalidateCache(`portal:prog:${roomId}:${slot}`);
 }
 
 export interface RoomFinishOutcome {
@@ -1050,6 +1120,7 @@ export async function finishRoomPlayer(
         .update({ winner_slot: slot, updated_at: new Date().toISOString() })
         .eq("id", room.id)
         .is("winner_slot", null);
+      invalidateCache(`portal:room:${room.id}`);
     }
   }
 
@@ -1088,6 +1159,7 @@ export async function finishRoomPlayer(
         .update({ status: "finished", finished_at: room.finished_at, updated_at: room.finished_at })
         .eq("id", room.id)
         .eq("status", "playing");
+      invalidateCache(`portal:room:${room.id}`);
     }
   }
 
@@ -1138,6 +1210,7 @@ export async function cancelRoom(code: string, slot: "host" | "guest", secret: s
     .from("game_rooms")
     .update({ status: "cancelled", updated_at: room.updated_at })
     .eq("id", room.id);
+  if (!error) invalidateCache(`portal:room:${room.id}`);
   return !error;
 }
 

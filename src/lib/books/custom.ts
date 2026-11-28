@@ -3,6 +3,7 @@ import { MAX_CUSTOM_GAMES, MAX_CUSTOM_ITEMS } from "@/lib/config";
 import { isSupabaseConfigured } from "@/lib/repo";
 import { dbDeleteCustomGame, dbGetCustomGame, dbListCustomGames, dbUpsertCustomGame } from "./db";
 import { cached, invalidateCache } from "@/lib/cache";
+import { invalidateCatalogCache } from "@/lib/portal/catalog";
 
 // ============================================================================
 // O'qituvchi o'zi yasagan o'yinlar
@@ -97,6 +98,7 @@ export interface CustomGameInput {
 
 export async function createCustomGame(input: CustomGameInput): Promise<CustomGame> {
   invalidateCache("custom:");
+  invalidateCatalogCache();
   if (!GAME_TYPES[input.type]) throw new Error(`Noma'lum o'yin turi: ${String(input.type)}`);
   const items = normalizeItems(input.items.filter(Boolean), input.type).slice(0, MAX_CUSTOM_ITEMS);
   if (!items.length) throw new Error("O'yin uchun kamida bitta savol yoki juftlik kerak.");
@@ -164,6 +166,7 @@ export async function updateCustomGame(
   patch: Partial<CustomGameInput>
 ): Promise<CustomGame | null> {
   invalidateCache("custom:");
+  invalidateCatalogCache();
   if (isSupabaseConfigured()) {
     const prev = await dbGetCustomGame(id);
     if (!prev) return null;
@@ -182,6 +185,7 @@ export async function updateCustomGame(
 
 export async function deleteCustomGame(id: string): Promise<boolean> {
   invalidateCache("custom:");
+  invalidateCatalogCache();
   if (isSupabaseConfigured()) return dbDeleteCustomGame(id);
   const all = await readAll();
   const next = all.filter((g) => g.id !== id);

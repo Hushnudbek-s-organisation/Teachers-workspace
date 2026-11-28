@@ -29,6 +29,7 @@ import { cleanExtractedText, keyphrases } from "./text";
 import { BOOK_KEYWORD_POOL, MAX_SAVED_RESULTS, UPLOAD_SESSION_TTL_MS } from "../config";
 import { isSupabaseConfigured } from "../repo";
 import { cached, invalidateCache } from "@/lib/cache";
+import { invalidateCatalogCache } from "@/lib/portal/catalog";
 import { listAllPortalResults, saveResultIdempotent } from "../portal/store";
 import {
   dbDeleteBook,
@@ -123,6 +124,7 @@ export async function getBook(id: string): Promise<Book | null> {
 
 export async function deleteBook(id: string): Promise<boolean> {
   invalidateCache("books:");
+  invalidateCatalogCache();
   if (isSupabaseConfigured()) return dbDeleteBook(id);
   const file = path.join(BOOKS_DIR, `${slugify(id)}.json`);
   try {
@@ -246,6 +248,7 @@ export function ingestBook(input: IngestInput): IngestResult {
 
 export async function saveBook(book: Book): Promise<void> {
   invalidateCache("books:");
+  invalidateCatalogCache();
   if (isSupabaseConfigured()) return dbSaveBook(book);
   await writeJson(path.join(BOOKS_DIR, `${slugify(book.id)}.json`), book);
 }
