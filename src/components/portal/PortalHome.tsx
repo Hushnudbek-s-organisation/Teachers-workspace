@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Gamepad2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CatalogEntry } from "@/lib/portal/types";
@@ -40,6 +41,18 @@ export function PortalHome({
   }, [catalog]);
 
   const [filter, setFilter] = useState<string>("all");
+  const router = useRouter();
+  const [duoCode, setDuoCode] = useState("");
+  const [duoErr, setDuoErr] = useState<string | null>(null);
+
+  const joinDuo = () => {
+    const c = duoCode.trim().toUpperCase();
+    if (!/^[A-Z0-9]{4,10}$/.test(c)) {
+      setDuoErr("Kod 4-6 ta harf/raqam. Do'stingizdan kodni oling.");
+      return;
+    }
+    router.push(`/o/duo/${c}`);
+  };
 
   const filtered = filter === "all" ? catalog : catalog.filter((e) => e.subjectKey === filter);
 
@@ -55,6 +68,35 @@ export function PortalHome({
         <p className="mt-1 text-sm text-white/85">
           O'yinini tanla va o'yna! {practiceCount ? `· ${practiceCount} ta mashq o'yini har doim mavjud.` : ""}
         </p>
+      </div>
+
+      {/* Do'stim bilan o'ynash — do'st xonasining KODini kiriting */}
+      <div className="mb-5 rounded-2xl border-2 border-emerald-200 bg-emerald-50 px-5 py-4">
+        <p className="text-sm font-bold text-emerald-900">🤝 Do'stim bilan o'ynash</p>
+        <p className="mt-0.5 text-xs text-emerald-800">
+          Do'stingiz sizga xona kodini berdi? Shu yerga kiriting — O'Z akkauntingiz bilan kirish chiqadi:
+        </p>
+        <div className="mt-2.5 flex gap-2">
+          <input
+            value={duoCode}
+            onChange={(e) => {
+              setDuoCode(e.target.value.toUpperCase());
+              setDuoErr(null);
+            }}
+            onKeyDown={(e) => e.key === "Enter" && joinDuo()}
+            placeholder="KOD, masalan: YGJJFE"
+            maxLength={10}
+            className="w-40 rounded-xl border-2 border-emerald-300 bg-white px-3 py-3 font-mono text-lg font-black tracking-[0.2em] text-slate-800 uppercase focus:border-emerald-500 focus:outline-none"
+            aria-label="Do'st xona kodi"
+          />
+          <button
+            onClick={joinDuo}
+            className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700 min-h-[50px]"
+          >
+            Do'stimning o'yiniga kirish ▶
+          </button>
+        </div>
+        {duoErr ? <p className="mt-1.5 text-xs font-semibold text-red-600">{duoErr}</p> : null}
       </div>
 
       {/* Fan bo'yicha filtr — katta chip tugmalar */}

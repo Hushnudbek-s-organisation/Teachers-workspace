@@ -412,8 +412,9 @@ await section("OQIM 5: do'stsiz boshlash + hamma o'qituvchi o'yinlari katalogda"
     items: [{ question: "3 x 3 = ?", options: ["6", "9", "12", "15"], answer: 1 } as never],
   });
   const cat2 = await buildPortalCatalog(portalInfoFor(st!));
-  const dups = cat2.filter((e) => e.title === "Dublikat nom");
-  check("Bir xil nomli 2 o'qituvchi o'yini IKKALASI ham ko'rinadi", dups.length === 2 && d1.id !== d2.id);
+  const hasD1 = cat2.some((e) => e.key === `custom:${d1.id}`);
+  const hasD2 = cat2.some((e) => e.key === `custom:${d2.id}`);
+  check("Bir xil nomli 2 o'qituvchi o'yini IKKALASI ham ko'rinadi", hasD1 && hasD2 && d1.id !== d2.id);
 
   // Do'stsiz Boshlash: xona playing bo'ladi, do'st KEYIN qo'shiladi
   const game = await resolveCatalogGameSafe("practice:kopaytirish-zinasi");
@@ -440,6 +441,90 @@ await section("OQIM 5: do'stsiz boshlash + hamma o'qituvchi o'yinlari katalogda"
 
   const fin = await finishRoomPlayer(room.code, "guest", secret, 30, newAttemptId());
   check("Kech qo'shilgan mehmon natijasi saqlanadi", fin.ok === true && fin.outcome!.saved === true);
+});
+
+// ---------------------------------------------------------------------------
+await section("OQIM 6: poyga g'olibi, vaqt rejimi, raqib natijasi ko'rinishi", async () => {
+  resetPortalDemoStore();
+  const h = await makeStudent("Poyga Hostova", "3-A");
+  const g = await makeStudent("Poyga Guestova", "3-A");
+  const game = await resolveCatalogGameSafe("practice:soz-yasash");
+
+  // POYGA: birinchi tugatgan g'olib, ikkinchisi g'olibni o'zgartira olmaydi
+  const room = await createRoom({
+    hostStudentId: h.id,
+    hostName: "Salima",
+    gameKey: "practice:soz-yasash",
+    gameTitle: game.title,
+    gameType: "practice",
+    subject: "Mashq o'yinlari",
+    grade: 3,
+    questions: game.questions,
+    endMode: "race",
+  });
+  const gj = await joinRoom(room.code, "Mehmon", g.id);
+  const gSecret = (gj as { ok: true; guestSecret: string }).guestSecret;
+  await startRoom(room.code, "host", room.hostSecret);
+
+  const hostRow = await getRoom(room.code);
+  for (let i = 0; i < hostRow!.total; i++) {
+    await recordRoomAnswer(room.code, "guest", gSecret, i, hostRow!.answer_key[i]!);
+  }
+
+  // Host birinchi tugatadi
+  const hostFin = await finishRoomPlayer(room.code, "host", room.hostSecret, 33, newAttemptId());
+  check("Poyga: host yakunladi", hostFin.ok === true);
+  let row = await getRoom(room.code);
+  check("Poyga: g'olib = host (birinchi finish)", row?.winner_slot === "host");
+
+  // Mehmon ham tugatadi — g'olib o'zgarmaydi, natijalar bir-biriga ko'rinadi
+  // (mehmonning barcha javoblari to'g'ri edi — host hammasini to'g'ri javob berdi)
+  await finishRoomPlayer(room.code, "guest", gSecret, 40, newAttemptId());
+  const guestState = await roomStateFor(room.code, "guest");
+  check("Mehmon host natijasini ko'radi", guestState?.opponentDone === true && guestState!.opponentScore !== null);
+  const hostState = await roomStateFor(room.code, "host");
+  check("Host mehmon natijasini ko'radi", hostState?.opponentDone === true);
+
+  // VAQT rejimi: savollar extended + timeLimit saqlanadi
+  const timeRoom = await createRoom({
+    hostStudentId: h.id,
+    hostName: "Salima",
+    gameKey: "practice:soz-yasash",
+    gameTitle: game.title,
+    gameType: "practice",
+    subject: "Mashq o'yinlari",
+    grade: 3,
+    questions: [...game.questions, ...game.questions, ...game.questions, ...game.questions],
+    endMode: "time",
+    timeLimitMin: 2,
+  });
+  const tr = await getRoom(timeRoom.code);
+  check("Vaqt rejimi saqlanadi (time + 2 daq)", tr?.end_mode === "time" && tr?.time_limit_min === 2 && tr!.total === game.questions.length * 4);
+
+  // DO'STSIZ BOSHLANGAN poygada ham kech qo'shilgan mehmon tugatadi
+  const room2 = await createRoom({
+    hostStudentId: h.id,
+    hostName: "Salima",
+    gameKey: "practice:soz-yasash",
+    gameTitle: game.title,
+    gameType: "practice",
+    subject: "Mashq o'yinlari",
+    grade: 3,
+    questions: game.questions,
+    endMode: "race",
+  });
+  await startRoom(room2.code, "host", room2.hostSecret); // do'stsiz!
+  const late = await joinRoom(room2.code, "LatePanda", null);
+  check("Poyga boshlangandan keyin qo'shilish OK", late.ok === true);
+  const secret2 = (late as { ok: true; guestSecret: string }).guestSecret;
+  const r2 = await getRoom(room2.code);
+  for (let i = 0; i < r2!.total; i++) {
+    await recordRoomAnswer(room2.code, "guest", secret2, i, r2!.answer_key[i]!);
+  }
+  const lateFin = await finishRoomPlayer(room2.code, "guest", secret2, 50, newAttemptId());
+  check("Kech qo'shilgan mehmon POYGADA ham tugatadi", lateFin.ok === true && lateFin.outcome!.saved === true);
+  row = await getRoom(room2.code);
+  check("Do'stsiz boshlangan poygada mehmon G'OLIB bo'ldi", row?.winner_slot === "guest");
 });
 
 async function resolveCatalogGameSafe(key: string) {

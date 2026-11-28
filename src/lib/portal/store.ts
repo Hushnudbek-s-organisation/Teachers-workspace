@@ -130,6 +130,12 @@ export interface RoomRow {
   questions: ServerQuestion[];
   answer_key: QuestionAnswer[];
   total: number;
+  /** Yakunlanish: questions = hamma savol, race = birinchi tugatgan, time = vaqt bo'yicha */
+  end_mode: "questions" | "race" | "time";
+  /** Vaqt bo'yicha rejim: minut (null = rejim yo'q) */
+  time_limit_min: number | null;
+  /** Poyga: birinchi tugatgan (birinchi finish yutadi) */
+  winner_slot: "host" | "guest" | null;
   expires_at: number;
   created_at: string;
   updated_at: string;
@@ -650,6 +656,10 @@ export interface CreateRoomInput {
   subject: string;
   grade: number | null;
   questions: ServerQuestion[];
+  /** Yakunlanish rejimi (o'qituvchi ko'p kishilik rejimlari kabi) */
+  endMode?: "questions" | "race" | "time";
+  /** Vaqt bo'yicha rejim: minutlar (1..10) */
+  timeLimitMin?: number | null;
 }
 
 export interface CreatedRoom {
@@ -683,6 +693,9 @@ export async function createRoom(input: CreateRoomInput): Promise<CreatedRoom> {
     questions: input.questions,
     answer_key: input.questions.map((q) => q.a),
     total: input.questions.length,
+    end_mode: input.endMode ?? "questions",
+    time_limit_min: input.timeLimitMin ?? null,
+    winner_slot: null,
     expires_at: Date.now() + ROOM_TTL_MS,
     created_at: now,
     updated_at: now,
@@ -714,6 +727,8 @@ export async function createRoom(input: CreateRoomInput): Promise<CreatedRoom> {
     questions: row.questions,
     answer_key: row.answer_key,
     total: row.total,
+    end_mode: row.end_mode,
+    time_limit_min: row.time_limit_min,
   });
   if (error) throw new Error(`Xona yaratishda xato: ${error.message}`);
   return {
@@ -747,7 +762,13 @@ export async function getRoom(code: string): Promise<RoomRow | null> {
       })
     | null;
   if (!row) return null;
-  const parsed: RoomRow = { ...row, expires_at: new Date(row.expires_at).getTime() };
+  const parsed: RoomRow = {
+    ...row,
+    end_mode: row.end_mode ?? "questions",
+    time_limit_min: row.time_limit_min ?? null,
+    winner_slot: row.winner_slot ?? null,
+    expires_at: new Date(row.expires_at).getTime(),
+  };
   if (parsed.status !== "finished" && parsed.status !== "cancelled" && Date.now() > parsed.expires_at) {
     parsed.status = "cancelled";
   }
@@ -955,6 +976,20 @@ export async function finishRoomPlayer(
 
   await upsertProgress(room.id, slot, { done: true, attempt_id: attemptId });
 
+  // POYGA: birinchi tugatgan g'olib (guarded update — parallel tugashda FAQAT bittasi)
+  if (room.end_mode === "race" && !room.winner_slot) {
+    if (!isSupabase()) {
+      const r = demo().rooms.get(room.id);
+      if (r && !r.winner_slot) r.winner_slot = slot;
+    } else {
+      await sb()
+        .from("game_rooms")
+        .update({ winner_slot: slot, updated_at: new Date().toISOString() })
+        .eq("id", room.id)
+        .is("winner_slot", null);
+    }
+  }
+
   const studentId = slot === "host" ? room.host_student_id : room.guest_student_id;
   const result = buildResultRow({
     attemptId,
@@ -1024,6 +1059,9 @@ export async function roomStateFor(code: string, slot: "host" | "guest"): Promis
     opponentDone: slot === "host" ? guest.done : host.done,
     expired: room.status === "cancelled",
     total: room.total,
+    endMode: room.end_mode,
+    timeLimitMin: room.time_limit_min,
+    winnerSlot: room.winner_slot,
   };
 }
 

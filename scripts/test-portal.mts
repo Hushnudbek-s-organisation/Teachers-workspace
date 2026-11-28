@@ -440,6 +440,51 @@ await section("5. DO'STIM BILAN O'YNASH — xona, 3-kishi, idempotent yakun", as
   const joinCancelled = await joinRoom(room2.code, "Kech", null);
   check("Bekor qilingan xonaga qo'shilish RAD", joinCancelled.ok === false);
 
+  // POYGA rejimi: birinchi tugatgan G'OLIB
+  const raceRoom = await createRoom({
+    hostStudentId: hostId,
+    hostName: "Host",
+    gameKey: "practice:soatni-top",
+    gameTitle: game!.title,
+    gameType: "practice",
+    subject: "Mashq o'yinlari",
+    grade: 3,
+    questions: game!.questions,
+    endMode: "race",
+  });
+  check("Poyga xonasi end_mode=race", raceRoom && (await getRoom(raceRoom.code))?.end_mode === "race");
+  await startRoom(raceRoom.code, "host", raceRoom.hostSecret);
+  const raceGuest = await joinRoom(raceRoom.code, "Poyachi", null);
+  check("Poyga: mehmon kech qo'shildi ham ishlaydi", raceGuest.ok === true);
+  await finishRoomPlayer(raceRoom.code, "host", raceRoom.hostSecret, 40, "race-attempt-host-1");
+  const afterHost = await getRoom(raceRoom.code);
+  check("Poyga: HOST birinchi tugatdi → g'olib host", afterHost?.winner_slot === "host");
+  await finishRoomPlayer(raceRoom.code, "guest", (raceGuest as { guestSecret: string }).guestSecret, 45, "race-attempt-guest-1");
+  const afterGuest = await getRoom(raceRoom.code);
+  check("Poyga: ikkinchi finish g'olibni O'ZGARTIRMAYDI", afterGuest?.winner_slot === "host");
+  const raceHostState = await roomStateFor(raceRoom.code, "host");
+  check("Poyga: holatda winnerSlot ko'rinadi", raceHostState?.winnerSlot === "host" && raceHostState?.endMode === "race");
+  const raceGuestState = await roomStateFor(raceRoom.code, "guest");
+  check("Poyga: raqib natijasi KO'RINADI (host done + score)", raceGuestState?.opponentDone === true && raceGuestState!.opponentScore !== null);
+
+  // VAQT rejimi: savollar davom etadi (extend)
+  const timeGame = await resolveCatalogGame("practice:kopaytirish-zinasi", 12345);
+  const timeRoom = await createRoom({
+    hostStudentId: hostId,
+    hostName: "Host",
+    gameKey: "practice:kopaytirish-zinasi",
+    gameTitle: timeGame!.title,
+    gameType: "practice",
+    subject: "Mashq o'yinlari",
+    grade: 3,
+    questions: [...timeGame!.questions, ...timeGame!.questions, ...timeGame!.questions], // extendQuestionsForTime simulyatsiyasi
+    endMode: "time",
+    timeLimitMin: 1,
+  });
+  const timeRow = await getRoom(timeRoom.code);
+  check("Vaqt rejimi: end_mode=time + time_limit_min=1", timeRow?.end_mode === "time" && timeRow?.time_limit_min === 1);
+  check("Vaqt rejimi: savollar davom etadi (> bazaviy)", timeRow!.total > 5);
+
   // Muddat tugashi
   const room3 = await createRoom({
     hostStudentId: hostId,

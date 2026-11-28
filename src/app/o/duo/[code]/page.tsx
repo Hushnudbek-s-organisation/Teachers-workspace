@@ -28,5 +28,15 @@ export default async function DuoRoomPage({ params }: { params: Promise<{ code: 
     );
   }
 
-  return <DuoJoin code={code} initial={{ status: state.status, gameTitle: state.gameTitle, total: state.total }} />;
+  return (
+    <DuoJoin
+      code={code}
+      initial={{
+        status: state.status,
+        gameTitle: state.gameTitle,
+        total: state.total,
+        guestFirstName: state.guest?.firstName ?? null,
+      }}
+    />
+  );
 }

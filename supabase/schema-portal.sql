@@ -133,6 +133,13 @@ create table if not exists game_rooms (
   finished_at       timestamptz
 );
 
+-- Yakunlanish rejimlari (o'qituvchi ko'p kishilik rejimlari kabi):
+--   questions = hamma savolga javob · race = birinchi tugatgan g'olib · time = vaqt bo'yicha
+alter table game_rooms add column if not exists end_mode       text not null default 'questions'
+  check (end_mode in ('questions', 'race', 'time'));
+alter table game_rooms add column if not exists time_limit_min smallint;
+alter table game_rooms add column if not exists winner_slot    text;
+
 create index if not exists idx_game_rooms_host   on game_rooms (host_student_id);
 create index if not exists idx_game_rooms_guest  on game_rooms (guest_student_id);
 create index if not exists idx_game_rooms_status on game_rooms (status);
@@ -222,6 +229,9 @@ actual as (
         and table_name = 'custom_games' and column_name = 'for_students')                           as games_flag_n,
     (select count(*) from pg_indexes where schemaname = 'public'
         and indexname = 'uq_student_links_active')                                                  as link_idx_n,
+    (select count(*) from information_schema.columns where table_schema = 'public'
+        and table_name = 'game_rooms'
+        and column_name in ('end_mode','time_limit_min','winner_slot'))                             as room_mode_cols_n,
     (select count(*) from expected e where exists (select 1 from pg_class c
         join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public' and c.relname = e.t and c.relrowsecurity))                       as rls_n
@@ -236,7 +246,9 @@ select
   a.link_idx_n   as "student_links faol-indeks",
   case when a.link_idx_n = 1 then '✅' else '❌' end as "Holat-4",
   a.rls_n        as "RLS yoqilgan jadvallar (7)",
-  case when a.rls_n = 7 then '✅' else '❌' end as "Holat-5"
+  case when a.rls_n = 7 then '✅' else '❌' end as "Holat-5",
+  a.room_mode_cols_n as "game_rooms rejim ustunlari (3)",
+  case when a.room_mode_cols_n = 3 then '✅' else '❌' end as "Holat-6"
 from actual a;
 
 -- ============================================================================

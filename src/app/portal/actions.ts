@@ -176,14 +176,52 @@ async function questionsForRoom(gameKey: string) {
   return game;
 }
 
+/** Vaqt bo'yicha rejim: savollar davom etib boradi — har davr yangi aralashish
+ *  bilan takrorlanadi (o'qituvchi "vaqt bo'yicha" rejimi kabi). */
+async function extendQuestionsForTime(gameKey: string, baseSeed: number, target: number) {
+  const base = await questionsForRoom(gameKey);
+  if (!base) return null;
+  const all = [...base.questions];
+  let cycle = 1;
+  const MAX = 40;
+  while (all.length < target && cycle < 8 && all.length < MAX) {
+    const g = await resolveCatalogGame(gameKey, baseSeed + cycle * 7919);
+    if (!g || !g.questions.length) break;
+    for (const q of g.questions) {
+      if (all.length >= Math.min(target, MAX)) break;
+      all.push(q);
+    }
+    cycle++;
+  }
+  return { ...base, questions: all };
+}
+
+export type RoomEndMode = "questions" | "race" | "time";
+
 export async function actionPortalCreateRoom(
   token: string,
-  gameKey: string
+  gameKey: string,
+  endMode: RoomEndMode = "questions",
+  timeLimitMin?: number
 ): Promise<{ ok: true; code: string; inviteUrl: string; expiresAt: string } | { ok: false; error: string }> {
   try {
     const student = await requireStudent(token);
-    const game = await questionsForRoom(gameKey);
+    const mode = endMode === "race" || endMode === "time" ? endMode : "questions";
+    let timeMin: number | null = null;
+    if (mode === "time") {
+      const m = Number(timeLimitMin ?? 2);
+      if (!Number.isFinite(m) || m < 1 || m > 10) return { ok: false, error: "Vaqt 1..10 daqiqa orasida bo'lishi kerak." };
+      timeMin = Math.round(m);
+    }
+
+    // Vaqt bo'yicha: ~6 savol/minut (3-sinf tempidan), ko'pi bilan 40
+    let game = await questionsForRoom(gameKey);
     if (!game) return { ok: false, error: "O'yin topilmadi yoki savollar tayyor emas." };
+    if (mode === "time") {
+      const seedGuess = Math.floor(Math.random() * 2_000_000_000);
+      const extended = await extendQuestionsForTime(gameKey, seedGuess, Math.min(6 * (timeMin ?? 2), 40));
+      if (extended) game = extended;
+    }
 
     const baseUrl = await getBaseUrl();
     const room = await createRoom({
@@ -195,6 +233,8 @@ export async function actionPortalCreateRoom(
       subject: game.subject,
       grade: game.grade,
       questions: game.questions,
+      endMode: mode,
+      timeLimitMin: timeMin,
     });
 
     // Host maxfiy kalit cookie'da — sahifa yangilanganda qayta ulanadi
@@ -306,13 +346,26 @@ async function guestStudentId(): Promise<string | null> {
   return student?.id ?? null;
 }
 
+/** Mehmon o'z akkauntidan kirgan bo'lsa — ismi va profili DARHOL ma'lum */
+async function guestIdentity(): Promise<{ id: string; firstName: string } | null> {
+  const jar = await cookies();
+  const token = jar.get(STUDENT_COOKIE)?.value;
+  if (!token) return null;
+  const student = await resolveStudentByToken(token);
+  if (!student) return null;
+  return { id: student.id, firstName: portalInfoFor(student).firstName || "Do'st" };
+}
+
 export async function actionPortalJoinRoom(
   code: string,
-  nickname: string,
+  nickname?: string,
   studentToken?: string
 ): Promise<JoinRoomResult> {
   try {
-    const clean = (nickname ?? "").trim().slice(0, 24);
+    // Akkauntidan kirgan bo'lsa — ismi avtomatik (forma bo'sh ham bo'lsa)
+    const identity = await guestIdentity();
+    let clean = (nickname ?? "").trim().slice(0, 24);
+    if (!clean && identity) clean = identity.firstName;
     if (!clean) return { ok: false, error: "Taxallusni kiriting." };
 
     // Mehmon o'z shaxsiy linkini kiritgan bo'lsa — natija o'z profiliga yoziladi
@@ -326,7 +379,7 @@ export async function actionPortalJoinRoom(
       }
       // Noto'g'ri token → mehmon sifatida o'ynaydi (xato ko'rsatilmaydi)
     }
-    if (!linkedStudentId) linkedStudentId = await guestStudentId();
+    if (!linkedStudentId) linkedStudentId = identity?.id ?? (await guestStudentId());
 
     const res = await joinRoom(code, clean, linkedStudentId);
     if (!res.ok) return { ok: false, error: JOIN_ERRORS[res.error] };
@@ -391,6 +444,8 @@ export interface RoomPageState {
   gameTitle?: string;
   total?: number;
   guestJoined?: boolean;
+  /** Mehmon o'z akkaunti bilan kelsa — ismi DARHOL ko'rinadi, parol/taxallus so'ralmaydi */
+  guest?: { firstName: string } | null;
 }
 
 /** /o/duo/<kod> sahifasi: cookie bo'yicha qayta ulanish yoki qo'shilish formasi */
@@ -412,11 +467,13 @@ export async function portalRoomPageState(code: string): Promise<RoomPageState> 
     };
   }
 
+  const identity = await guestIdentity();
   return {
     found: true,
     status: room.status,
     gameTitle: room.game_title,
     total: room.total,
     guestJoined: Boolean(room.guest_secret_hash),
+    guest: identity ? { firstName: identity.firstName } : null,
   };
 }
