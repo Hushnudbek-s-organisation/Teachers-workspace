@@ -12,6 +12,7 @@
 // ============================================================================
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Cake,
   Check,
@@ -161,11 +162,13 @@ function LinkSuccessDialog({
   studentName,
   linkUrl,
   qr,
+  rotated,
   onClose,
 }: {
   studentName: string;
   linkUrl: string;
   qr?: string | null;
+  rotated?: boolean;
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -182,12 +185,14 @@ function LinkSuccessDialog({
   };
 
   return (
-    <Modal open title="O'quvchi qo'shildi! 🎉" onClose={onClose}>
+    <Modal open title={rotated ? "Link yangilandi! 🔄" : "O'quvchi qo'shildi! 🎉"} onClose={onClose}>
       <div className="space-y-4">
         <div className="rounded-xl bg-emerald-50 px-4 py-3">
           <p className="text-sm font-semibold text-emerald-800">
             <Check className="mr-1 inline h-4 w-4" />
-            {studentName} saqlandi. Endi unga shaxsiy o'yin linki beramiz:
+            {rotated
+              ? `${studentName} uchun YANGI havola tayyor — eski havola o'chirildi:`
+              : `${studentName} saqlandi. Endi unga shaxsiy o'yin linki beramiz:`}
           </p>
         </div>
         <p className="text-xs leading-relaxed text-slate-500">
@@ -242,6 +247,9 @@ function LinkSuccessDialog({
           Keyinroq ro'yxatda havolani <b>yangilash</b> (eski havola o'ladi) yoki <b>bekor qilish</b> mumkin.
           Havolani qayta ko'rsatib bo'lmaydi — xavfsizlik uchun bazada faqat uning maxfiy xeshi saqlanadi.
         </p>
+        <p className="text-center text-[11px] text-slate-400">
+          Bu oyna yopilmaydi — nusxalash/QR yuborib bo'lgach yuqoridagi <b>✕</b> yoki «Yopish»ni bosing.
+        </p>
         <div className="flex justify-end">
           <Button variant="secondary" onClick={onClose}>
             Yopish
@@ -265,7 +273,7 @@ function LinkActions({
   studentName: string;
   status: LinkStatusView | undefined;
   onChanged: () => void;
-  onIssued: (info: { name: string; url: string; qr: string | null }) => void;
+  onIssued: (info: { name: string; url: string; qr: string | null; rotated?: boolean }) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
@@ -275,9 +283,12 @@ function LinkActions({
     setBusy(true);
     setProblem(null);
     try {
-      const res = status?.active ? await actionRotateStudentLink(studentId) : await actionIssueStudentLink(studentId);
+      const rotated = Boolean(status?.active);
+      const res = rotated ? await actionRotateStudentLink(studentId) : await actionIssueStudentLink(studentId);
       if (res.ok && res.url) {
-        onIssued({ name: studentName, url: res.url, qr: res.qr ?? null });
+        // Avval oynani ko'rsatamiz, keyin fon bilan yumshoq yangilaymiz —
+        // oyna hech qanday holatda o'zidan-o'zi yopilmaydi (faqat X bilan yopiladi)
+        onIssued({ name: studentName, url: res.url, qr: res.qr ?? null, rotated });
         onChanged();
       } else if (!res.ok) {
         setProblem(res.error ?? "Amal bajarilmadi");
@@ -376,10 +387,11 @@ export function StudentsClient({
   const [deleting, setDeleting] = useState<Student | null>(null);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [issued, setIssued] = useState<{ name: string; url: string; qr: string | null } | null>(null);
+  const [issued, setIssued] = useState<{ name: string; url: string; qr: string | null; rotated?: boolean } | null>(null);
   const [linksModal, setLinksModal] = useState(false);
   const [linksResult, setLinksResult] = useState<ClassLinksView | null>(null);
   const [version, setVersion] = useState(0);
+  const router = useRouter();
 
   // Qidiruv + sinf filtri
   const [query, setQuery] = useState("");
@@ -414,9 +426,12 @@ export function StudentsClient({
     });
   }
 
+  // MUHIM: window.location.reload() EMAS! router.refresh() — server ma'lumotini
+  // yumshoq yangilaydi va CLIENT holatini (link+QR oynasi) SAQLAYDI. Oyna
+  // foydalanuvchi X (yoki «Yopish») bosmaguncha yopilmaydi.
   function refreshLinks() {
     setVersion((v) => v + 1);
-    window.location.reload();
+    router.refresh();
   }
 
   return (
@@ -704,6 +719,7 @@ export function StudentsClient({
           studentName={issued.name}
           linkUrl={issued.url}
           qr={issued.qr}
+          rotated={issued.rotated}
           onClose={() => setIssued(null)}
         />
       ) : null}
