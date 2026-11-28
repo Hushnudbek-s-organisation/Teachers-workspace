@@ -793,13 +793,15 @@ export async function joinRoom(
   return { ok: true, guestSecret, room };
 }
 
-/** Host "Boshlash" — xona holati playing bo'ladi */
+/** Host "Boshlash" — xona holati playing bo'ladi.
+ *  Do'st hali qo'shilmagan bo'lsa HAM boshlash mumkin (qotib qolishning
+ *  oldini olish uchun) — do'st keyin qo'shiladi va o'ynay oladi. */
 export async function startRoom(code: string, slot: "host" | "guest", secret: string): Promise<boolean> {
   const room = await getRoom(code);
   if (!room) return false;
   if (!secretMatches(room, slot, secret)) return false;
   if (slot !== "host") return false;
-  if (room.status !== "waiting" || !room.guest_secret_hash) return false;
+  if (room.status !== "waiting") return false;
   room.status = "playing";
   room.updated_at = new Date().toISOString();
   if (!isSupabase()) return true;

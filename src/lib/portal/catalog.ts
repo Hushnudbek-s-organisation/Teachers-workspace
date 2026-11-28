@@ -101,8 +101,32 @@ export async function buildPortalCatalog(info: StudentPortalInfo): Promise<Catal
     });
   }
 
+  // --------------- O'qituvchi o'yinlari — HAMMASI ko'rinadi -----------------
+  // Foydalanuvchi talabi: o'qituvchi yasagan barcha o'yinlar bolalarga
+  // ko'rinadi (sinf darajasidan qat'i nazar). Cheklovlar faqat:
+  // for_students=false («Faqat sinf uchun») va bingo (doska formati).
+  const customGames = (await listCustomGames()).filter(
+    (g) => g.forStudents !== false && g.type !== "bingo"
+  );
+  for (const game of customGames) {
+    if (!portalQuestionsReady(game)) continue;
+    entries.push({
+      key: `custom:${game.id}`,
+      title: game.title,
+      instructions: game.instructions,
+      boardKind: boardKindFor(game),
+      emoji: gameBoardEmoji(game.type),
+      subject: subjectLabel(game.subject),
+      subjectKey: game.subject,
+      source: "custom",
+      practice: false,
+      savollar: Math.min(game.items.length, 10),
+      origin: "O'qituvchi o'yini",
+    });
+  }
+
   const grade = info.grade;
-  if (grade === null) return entries; // sinf darajasi noma'lum — avtomatik material OCHILMAYDI
+  if (grade === null) return entries; // sinf darajasi noma'lum — kitoblar OCHILMAYDI
 
   // --------------------------- Kitob o'yinlari (grade mos) --------------------------
   const books = (await listBookMetas()).filter((b) => b.grade === grade);
@@ -133,29 +157,7 @@ export async function buildPortalCatalog(info: StudentPortalInfo): Promise<Catal
     }
   }
 
-  // ------------------------- O'qituvchi o'yinlari (grade mos) -----------------------
-  const customGames = (await listCustomGames()).filter(
-    (g) => g.grade === grade && g.forStudents !== false && g.type !== "bingo"
-  );
-  for (const game of customGames) {
-    const key = dedupeKey(game.title, game.type);
-    if (seen.has(key)) continue;
-    if (!portalQuestionsReady(game)) continue;
-    seen.add(key);
-    entries.push({
-      key: `custom:${game.id}`,
-      title: game.title,
-      instructions: game.instructions,
-      boardKind: boardKindFor(game),
-      emoji: gameBoardEmoji(game.type),
-      subject: subjectLabel(game.subject),
-      subjectKey: game.subject,
-      source: "custom",
-      practice: false,
-      savollar: Math.min(game.items.length, 10),
-      origin: "O'qituvchi o'yini",
-    });
-  }
+  // ------------------------- O'qituvchi o'yinlari (eski blok — o'chirildi) -----------------------
 
   return entries;
 }

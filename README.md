@@ -141,11 +141,12 @@ O'qituvchi **O'quvchilar** sahifasida har bir bola uchun **shaxsiy havola** bera
 - Havola ko'rinishi: `https://sayt.uz/o/<tasodifiy-token>` — ichida **ism, telefon,
   tug'ilgan sana, oddiy ID YO'Q**; bazada faqat **SHA-256 hash** saqlanadi.
 - O'quvchi havolani ochadi — **parol so'ralmaydi**, katta kartalardan o'yin tanlaydi.
-- Katalog serverda avtomatik yig'iladi: darslik o'yinlari + o'qituvchi o'yinlari
-  (`forStudents=true`) + 3 ta yangi mashq o'yini (**«Mashq o'yinlari»** alohida
-  blokda: «Ko'paytirish zinasi», «So'z yasash», «Soatni top»). Yangi o'yin
-  qo'shilsa — ro'yxatga O'ZI chiqadi, kod yozish shart emas. Bingo kabi doska
-  vositalari portaldan yashirin (eski `/classroom` joyida qolgan).
+- Katalog serverda avtomatik yig'iladi: **o'qituvchi yasagan HAMMA o'yinlar**
+  (sinf darajasidan qat'i nazar; «Faqat sinf uchun» belgilanganlar va bingo
+  bundan mustasno) + darslik o'yinlari (sinf darajasiga mos) + 3 ta tayyor
+  mashq o'yini (**«Mashq o'yinlari»** blokda: «Ko'paytirish zinasi», «So'z
+  yasash», «Soatni top»). Yangi o'yin qo'shilsa — ro'yxatga O'ZI chiqadi.
+  Bingo kabi doska vositalari portaldan yashirin (eski `/classroom` joyida).
 - Har o'yin: bitta qisqa yo'riqnoma, katta javob tugmalari, «Savol 2/5» progress,
   to'g'ri/noto'g'ri **rang + ✅/❌ belgi** bilan, oxirida «Yana o'ynash». Vaqt
   bosimi majburiy emas. Har o'ynashda savollar aralashadi (2 o'yinchi bir xonada
@@ -179,7 +180,8 @@ O'qituvchi **O'quvchilar** sahifasida har bir bola uchun **shaxsiy havola** bera
 1. O'quvchi portaldan «Do'stim bilan o'ynash» → **taklif havolasi** yasaladi
    (`/o/duo/<kod>`, 2 soat yashaydi) va «Taklif linkini nusxalash» bilan beriladi.
 2. Do'st havolani o'z telefonidan ochadi, taxallus kiritadi → «Do'stni kutyapman»
-   → xona egasi «Boshlash» bosadi.
+   → xona egasi «Boshlash» bosadi. Do'st qo'shilmasa ham «Boshlash» bosish
+   MUMKIN — u havolani ochib qo'shilgach o'ynayveradi (hech kim qotib qolmaydi).
 3. Uchinchi qurilma qo'shilmaydi; do'st faqat **taxallusni** ko'radi (ism/telefon
    emas). Ochiq chat yoki umumiy reyting yo'q.
 4. Sahifa yangilansa yoki tarmoq uzilsa — holat tiklanadi («Qayta ulanmoqda...»).

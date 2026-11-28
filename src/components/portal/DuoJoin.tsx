@@ -99,6 +99,8 @@ export function DuoJoin({
             setError("Xona bekor qilingan yoki muddati tugagan.");
             setPhase("error");
           }
+        } else {
+          setNetProblem(true);
         }
       } catch {
         if (alive) setNetProblem(true);
@@ -214,6 +216,12 @@ export function DuoJoin({
                   ⚠ Ulanish uzildi — qayta ulanmoqda...
                 </p>
               ) : null}
+              <button
+                onClick={() => void resume()}
+                className="rounded-xl border-2 border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 min-h-[44px]"
+              >
+                🔄 Yangilash
+              </button>
               <p className="text-xs text-slate-400">Bu sahifani yopsangiz, taklif havolasini qayta oching — o'yin davom etadi.</p>
             </div>
           ) : phase === "play" && questions ? (
