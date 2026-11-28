@@ -124,4 +124,10 @@ export interface RoomStateView {
   opponentDone: boolean;
   expired: boolean;
   total: number;
+  /** Yakunlanish rejimi: questions = hamma savol, race = birinchi tugatgan, time = vaqt bo'yicha */
+  endMode: "questions" | "race" | "time";
+  /** Vaqt bo'yicha rejim: minutlar (1..10) */
+  timeLimitMin: number | null;
+  /** Poyga rejimi: birinchi tugatgan o'yinchi */
+  winnerSlot: "host" | "guest" | null;
 }

@@ -179,9 +179,15 @@ O'qituvchi **O'quvchilar** sahifasida har bir bola uchun **shaxsiy havola** bera
 
 1. O'quvchi portaldan «Do'stim bilan o'ynash» → **taklif havolasi** yasaladi
    (`/o/duo/<kod>`, 2 soat yashaydi) va «Taklif linkini nusxalash» bilan beriladi.
-2. Do'st havolani o'z telefonidan ochadi, taxallus kiritadi → «Do'stni kutyapman»
-   → xona egasi «Boshlash» bosadi. Do'st qo'shilmasa ham «Boshlash» bosish
-   MUMKIN — u havolani ochib qo'shilgach o'ynayveradi (hech kim qotib qolmaydi).
+2. Do'st O'Z havolasini ochib, portal bosh sahifasidagi **«Do'stim bilan o'ynash»**
+   bo'limiga xona **KODINI** kiritsin (yoki taklif havolasini ochsin). O'z
+   akkauntidan kirgani uchun ismi DARHOL ko'rinadi, natija o'z profiliga yoziladi.
+   Xona egasi «Boshlash» bosadi (do'st qo'shilmasa ham bosish MUMKIN).
+3. **Yakunlanish rejimlari** (o'qituvchi ko'p kishilik rejimlari kabi):
+   🎯 Savollar soni · 🏁 Poyga (birinchi tugatgan g'olib) · ⏱ Vaqt bo'yicha
+   (1/2/3/5 daqiqa, vaqt tugaguncha savollar davom etadi).
+4. Yakunda raqiblar natijasi BIR-BIRIGA avtomatik ko'rinadi (polling);
+   poygada g'olib ko'rsatiladi.
 3. Uchinchi qurilma qo'shilmaydi; do'st faqat **taxallusni** ko'radi (ism/telefon
    emas). Ochiq chat yoki umumiy reyting yo'q.
 4. Sahifa yangilansa yoki tarmoq uzilsa — holat tiklanadi («Qayta ulanmoqda...»).

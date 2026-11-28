@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check, PartyPopper, RotateCcw } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { FinishOutcome, PortalQuestion, RoomStateView } from "@/lib/portal/types";
 import {
   actionPortalJoinRoom,
@@ -32,10 +33,10 @@ export function DuoJoin({
   initial,
 }: {
   code: string;
-  initial: { status?: string; gameTitle?: string; total?: number };
+  initial: { status?: string; gameTitle?: string; total?: number; guestFirstName?: string | null };
 }) {
   const [phase, setPhase] = useState<Phase>("join");
-  const [nickname, setNickname] = useState("");
+  const [nickname, setNickname] = useState(initial.guestFirstName ?? "");
   const [studentToken, setStudentToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<RoomStateView | null>(null);
@@ -45,7 +46,9 @@ export function DuoJoin({
   const [netProblem, setNetProblem] = useState(false);
   const [saving, setSaving] = useState(false);
   const [gameTitle, setGameTitle] = useState(initial.gameTitle ?? "");
+  const [timeLeftSec, setTimeLeftSec] = useState<number | null>(null);
   const finishedRef = useRef(false);
+  const scoreRef = useRef(0);
 
   // Qayta ulanish: cookie'da maxfiy kalit bo'lsa to'g'ridan-to'g'ri holatni olamiz
   const resume = useCallback(async () => {
@@ -58,6 +61,11 @@ export function DuoJoin({
         if (q.ok) {
           setQuestions(q.questions);
           setStartedAt(Date.now());
+          if (res.state.endMode === "time" && res.state.timeLimitMin) {
+            const elapsed = Math.floor((Date.now() - new Date(res.state.myAnswered ? Date.now() : Date.now()).getTime()) / 1000);
+            void elapsed;
+            setTimeLeftSec(res.state.timeLimitMin * 60);
+          }
           setPhase("play");
           return true;
         }
@@ -93,6 +101,9 @@ export function DuoJoin({
             if (q.ok) {
               setQuestions(q.questions);
               setStartedAt(Date.now());
+              if (res.state.endMode === "time" && res.state.timeLimitMin) {
+                setTimeLeftSec(res.state.timeLimitMin * 60);
+              }
               setPhase("play");
             }
           } else if (res.state.status === "cancelled") {
@@ -114,6 +125,38 @@ export function DuoJoin({
     };
   }, [phase, code]);
 
+  // ⏱ Vaqt bo'yicha rejim: hisoblagich + avtomatik yakunlash
+  useEffect(() => {
+    if (phase !== "play" || timeLeftSec === null) return;
+    if (timeLeftSec <= 0) {
+      void finish(scoreRef.current);
+      return;
+    }
+    const t = window.setTimeout(() => setTimeLeftSec((s) => (s === null ? null : s - 1)), 1000);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, timeLeftSec]);
+
+  // Yakunda raqib natijasi avtomatik ko'rinadi (polling)
+  useEffect(() => {
+    if (phase !== "done") return;
+    let alive = true;
+    const tick = async () => {
+      try {
+        const res = await actionPortalRoomState(code);
+        if (alive && res.ok) setState(res.state);
+      } catch {
+        /* keyingi siklda */
+      }
+    };
+    const timer = window.setInterval(tick, 3000);
+    void tick();
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [phase, code]);
+
   const join = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -126,10 +169,11 @@ export function DuoJoin({
     setPhase("waiting");
   };
 
-  const finish = async (localScore: number) => {
+  const finish = async (localScore?: number) => {
     if (finishedRef.current) return;
     finishedRef.current = true;
     setSaving(true);
+    setTimeLeftSec(null);
     const timeSec = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
     try {
       const res = await actionPortalRoomFinish(code, timeSec, newAttemptId());
@@ -138,7 +182,7 @@ export function DuoJoin({
         setOutcome({
           saved: false,
           alreadySaved: false,
-          score: localScore,
+          score: localScore ?? scoreRef.current,
           total: questions?.length ?? 0,
           percent: 0,
           problem: res.error,
@@ -162,17 +206,31 @@ export function DuoJoin({
         <div className="p-4 sm:p-6">
           {phase === "join" ? (
             <form onSubmit={join} className="flex flex-col gap-4 py-2">
-              <p className="text-sm font-medium text-slate-600">
-                Do'stingiz sizni o'yin kutmoqda! O'yinchining taxallusini kiriting:
-              </p>
-              <input
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                required
-                maxLength={24}
-                placeholder="Taxallus, masalan: SuperPanda"
-                className="w-full rounded-xl border-2 border-slate-300 px-4 py-3.5 text-base font-semibold text-slate-800 focus:border-indigo-500 focus:outline-none min-h-[52px]"
-              />
+              {initial.guestFirstName ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                  <p className="text-sm font-semibold text-emerald-800">
+                    👤 Siz: {initial.guestFirstName} (o'z akkauntingiz bilan kirdingiz)
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-emerald-700">
+                    Natijangiz avtomatik O'Z profilingizga yoziladi.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm font-medium text-slate-600">
+                  Do'stingiz sizni o'yin kutmoqda! O'yinchining taxallusini kiriting:
+                </p>
+              )}
+              {!initial.guestFirstName ? (
+                <input
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  required
+                  maxLength={24}
+                  placeholder="Taxallus, masalan: SuperPanda"
+                  className="w-full rounded-xl border-2 border-slate-300 px-4 py-3.5 text-base font-semibold text-slate-800 focus:border-indigo-500 focus:outline-none min-h-[52px]"
+                />
+              ) : null}
+              {!initial.guestFirstName ? (
               <details className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <summary className="cursor-pointer text-xs font-semibold text-slate-600">
                   O'quvchi linkingiz bormi? (ixtiyoriy)
@@ -189,6 +247,7 @@ export function DuoJoin({
                   className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700"
                 />
               </details>
+              ) : null}
               {error ? (
                 <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700">⚠ {error}</p>
               ) : null}
@@ -196,7 +255,7 @@ export function DuoJoin({
                 type="submit"
                 className="rounded-xl bg-emerald-600 px-7 py-3.5 text-base font-bold text-white hover:bg-emerald-700 min-h-[52px]"
               >
-                Qo'shilish ▶
+                {initial.guestFirstName ? `Xonaga kirish ▶ (${initial.guestFirstName})` : "Qo'shilish ▶"}
               </button>
               {netProblem ? (
                 <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">
@@ -225,32 +284,59 @@ export function DuoJoin({
               <p className="text-xs text-slate-400">Bu sahifani yopsangiz, taklif havolasini qayta oching — o'yin davom etadi.</p>
             </div>
           ) : phase === "play" && questions ? (
+            <div className="mb-3 space-y-2">
+              {state?.endMode === "race" ? (
+                <p className="rounded-xl bg-amber-50 px-4 py-2 text-center text-sm font-bold text-amber-800">🏁 Poyga — birinchi tugatgan g'olib!</p>
+              ) : null}
+              {timeLeftSec !== null ? (
+                <p
+                  className={cn(
+                    "rounded-xl px-4 py-2.5 text-center text-base font-bold",
+                    timeLeftSec <= 30 ? "bg-red-100 text-red-700" : "bg-indigo-50 text-indigo-700"
+                  )}
+                >
+                  ⏱ Qoldi: {Math.floor(timeLeftSec / 60)}:{String(timeLeftSec % 60).padStart(2, "0")}
+                </p>
+              ) : null}
+            </div>
+          ) : phase === "play" && questions ? (
             <QuestionFlow
               questions={questions}
               onAnswer={(qIndex, choice) =>
                 actionPortalRoomAnswer(code, qIndex, choice).then((r) => {
                   if (!r.ok) throw new Error(r.error);
+                  if (r.feedback.correct) scoreRef.current += 1;
                   return r.feedback;
                 })
               }
-              onFinish={finish}
+              onFinish={(score) => void finish(score)}
               startAt={state?.myAnswered ?? 0}
               initialScore={state?.myScore ?? 0}
             />
           ) : phase === "done" ? (
             <div className="flex flex-col items-center gap-4 py-6 text-center">
+              {state?.winnerSlot ? (
+                state.winnerSlot === "guest" ? (
+                  <p className="rounded-xl bg-amber-100 px-5 py-2.5 text-base font-bold text-amber-800">🏆 Siz birinchi tugatdingiz — G'OLIB!</p>
+                ) : (
+                  <p className="rounded-xl bg-slate-100 px-5 py-2.5 text-base font-bold text-slate-700">🏅 Do'stingiz birinchi tugatdi (g'olib)</p>
+                )
+              ) : null}
               <p className="text-3xl font-bold text-slate-900">
                 {outcome ? `${outcome.score} / ${outcome.total}` : "Yakunlandi!"}
               </p>
               {outcome ? (
                 <>
                   <p className="text-sm font-medium text-slate-500">{outcome.percent}% to'g'ri javob</p>
-                  {state?.opponentScore != null ? (
+                  {state?.opponentDone && state?.opponentScore != null ? (
                     <p className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
-                      Do'stingiz: {state.opponentScore} / {state.total} to'g'ri
+                      🎯 Do'stingiz natijasi: {state.opponentScore} / {state.total} ({state.total ? Math.round((state.opponentScore / state.total) * 100) : 0}%)
                     </p>
                   ) : (
-                    <p className="rounded-xl bg-slate-100 px-4 py-2 text-sm text-slate-500">Do'stingiz hali tugatmadi...</p>
+                    <p className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm text-slate-500">
+                      <span className="flex h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" aria-hidden />
+                      Do'stingiz hali o'ynamoqda... natijasi avtomatik ko'rinadi
+                    </p>
                   )}
                   {saving ? (
                     <p className="text-sm text-slate-500">Saqlanmoqda...</p>
