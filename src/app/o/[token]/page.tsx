@@ -1,5 +1,5 @@
 import { resolveStudentByToken } from "@/lib/portal/store";
-import { buildPortalCatalog, portalInfoFor } from "@/lib/portal/catalog";
+import { buildPortalCatalog, dailyGameFor, isGameLockedByDaily, portalInfoFor } from "@/lib/portal/catalog";
 import { PortalHome } from "@/components/portal/PortalHome";
 import { PortalLinkError } from "@/components/portal/PortalLinkError";
 
@@ -28,6 +28,28 @@ export default async function StudentPortalPage({ params }: { params: Promise<{ 
 
   const info = portalInfoFor(student);
   const catalog = await buildPortalCatalog(info);
+  const daily = await dailyGameFor(info, catalog);
+  const lockedKeys = daily
+    ? catalog.filter((e) => isGameLockedByDaily(e.key, daily)).map((e) => e.key)
+    : [];
 
-  return <PortalHome token={token} student={{ firstName: info.firstName, classLabel: info.classLabel }} catalog={catalog} />;
+  return (
+    <PortalHome
+      token={token}
+      student={{ firstName: info.firstName, classLabel: info.classLabel }}
+      catalog={catalog}
+      daily={
+        daily
+          ? {
+              key: daily.entry.key,
+              title: daily.entry.title,
+              emoji: daily.entry.emoji,
+              points: daily.points,
+              done: daily.done,
+            }
+          : null
+      }
+      lockedKeys={lockedKeys}
+    />
+  );
 }

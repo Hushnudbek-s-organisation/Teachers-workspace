@@ -430,6 +430,8 @@ export interface GameResult {
   mode?: "solo" | "duo" | null;
   /** 0..100 (portal server hisoblab yozadi) */
   percent?: number | null;
+  /** Ball tizimi: ona-tili=4, matematika=2 (portal hisoblab yozadi) */
+  points?: number | null;
   /** portal | dashboard — qayerdan saqlangan */
   source?: string | null;
 }

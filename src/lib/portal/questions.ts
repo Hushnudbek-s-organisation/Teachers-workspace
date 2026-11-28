@@ -43,13 +43,24 @@ function pairOptions(pairs: MatchingItem[], correctIndex: number): string[] {
   return [...new Set(opts)];
 }
 
+/** "??"/"= ? = ?" kabi takrorlangan soroq belgilarini bittaga tushirish */
+function normalizePrompt(text: string): string {
+  return text
+    .replace(/\s*=\s*(?:\?\s*)+=\s*\?/g, " = ?")   // "= ? = ?" → "= ?"
+    .replace(/(?:\?\s*){2,}\?/g, " ?")            // "????" → "?"
+    .replace(/\?{2,}/g, "?")                       // "??" → "?"
+    .replace(/\s+\?/g, " ?")
+    .trim();
+}
+
 function mcFromItem(item: GameItem, distractors: string[], seed: number, salt: number): ServerQuestion | null {
   let prompt = "";
   let correct = "";
 
   if ("expression" in item) {
     const m = item as MathItem;
-    prompt = m.expression.endsWith("=") ? `${m.expression} ?` : `${m.expression} = ?`;
+    const e = m.expression.trim();
+    prompt = e.includes("?") ? e : e.endsWith("=") ? `${e} ?` : `${e} = ?`;
     correct = num(m.answer);
     const wrongs = (m.options ?? []).filter((o) => o !== m.answer).map(String);
     distractors = [...wrongs, ...distractors];
@@ -88,6 +99,7 @@ function mcFromItem(item: GameItem, distractors: string[], seed: number, salt: n
   }
 
   if (!prompt || !correct) return null;
+  prompt = normalizePrompt(prompt);
   const options = [...new Set([correct, ...distractors.filter((d) => d && d !== correct)])].slice(0, 4);
   if (options.length < 2) return null;
   // Juftlik savollari uchun chalg'ituvchilar yetarli bo'lmasa — 2 ta variant qoladi

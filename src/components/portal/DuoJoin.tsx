@@ -36,8 +36,6 @@ export function DuoJoin({
   initial: { status?: string; gameTitle?: string; total?: number; guestFirstName?: string | null };
 }) {
   const [phase, setPhase] = useState<Phase>("join");
-  const [nickname, setNickname] = useState(initial.guestFirstName ?? "");
-  const [studentToken, setStudentToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<RoomStateView | null>(null);
   const [questions, setQuestions] = useState<PortalQuestion[] | null>(null);
@@ -160,7 +158,7 @@ export function DuoJoin({
   const join = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const res = await actionPortalJoinRoom(code, nickname, studentToken.trim() || undefined);
+    const res = await actionPortalJoinRoom(code);
     if (!res.ok) {
       setError(res.error ?? "Qo'shilish muvaffaqiyatsiz.");
       return;
@@ -215,38 +213,6 @@ export function DuoJoin({
                     Natijangiz avtomatik O'Z profilingizga yoziladi.
                   </p>
                 </div>
-              ) : (
-                <p className="text-sm font-medium text-slate-600">
-                  Do'stingiz sizni o'yin kutmoqda! O'yinchining taxallusini kiriting:
-                </p>
-              )}
-              {!initial.guestFirstName ? (
-                <input
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  required
-                  maxLength={24}
-                  placeholder="Taxallus, masalan: SuperPanda"
-                  className="w-full rounded-xl border-2 border-slate-300 px-4 py-3.5 text-base font-semibold text-slate-800 focus:border-indigo-500 focus:outline-none min-h-[52px]"
-                />
-              ) : null}
-              {!initial.guestFirstName ? (
-              <details className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <summary className="cursor-pointer text-xs font-semibold text-slate-600">
-                  O'quvchi linkingiz bormi? (ixtiyoriy)
-                </summary>
-                <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-                  Agar sizda o'quvchi shaxsiy linki bo'lsa, uni bu yerga yozing — natijangiz FAQAT
-                  sizning o'quvchi profilngizga yoziladi. Linkingiz yo'q bo'lsa, mehmon sifatida
-                  o'ynaysiz (hech qanday profilga yozilmaydi).
-                </p>
-                <input
-                  value={studentToken}
-                  onChange={(e) => setStudentToken(e.target.value)}
-                  placeholder="/o/ havoladagi uzun kod"
-                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700"
-                />
-              </details>
               ) : null}
               {error ? (
                 <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700">⚠ {error}</p>
@@ -255,7 +221,7 @@ export function DuoJoin({
                 type="submit"
                 className="rounded-xl bg-emerald-600 px-7 py-3.5 text-base font-bold text-white hover:bg-emerald-700 min-h-[52px]"
               >
-                {initial.guestFirstName ? `Xonaga kirish ▶ (${initial.guestFirstName})` : "Qo'shilish ▶"}
+                {initial.guestFirstName ? `Xonaga kirish ▶ (${initial.guestFirstName})` : "Xonaga kirish ▶"}
               </button>
               {netProblem ? (
                 <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">
@@ -284,35 +250,36 @@ export function DuoJoin({
               <p className="text-xs text-slate-400">Bu sahifani yopsangiz, taklif havolasini qayta oching — o'yin davom etadi.</p>
             </div>
           ) : phase === "play" && questions ? (
-            <div className="mb-3 space-y-2">
-              {state?.endMode === "race" ? (
-                <p className="rounded-xl bg-amber-50 px-4 py-2 text-center text-sm font-bold text-amber-800">🏁 Poyga — birinchi tugatgan g'olib!</p>
-              ) : null}
-              {timeLeftSec !== null ? (
-                <p
-                  className={cn(
-                    "rounded-xl px-4 py-2.5 text-center text-base font-bold",
-                    timeLeftSec <= 30 ? "bg-red-100 text-red-700" : "bg-indigo-50 text-indigo-700"
-                  )}
-                >
-                  ⏱ Qoldi: {Math.floor(timeLeftSec / 60)}:{String(timeLeftSec % 60).padStart(2, "0")}
-                </p>
-              ) : null}
-            </div>
-          ) : phase === "play" && questions ? (
-            <QuestionFlow
-              questions={questions}
-              onAnswer={(qIndex, choice) =>
-                actionPortalRoomAnswer(code, qIndex, choice).then((r) => {
-                  if (!r.ok) throw new Error(r.error);
-                  if (r.feedback.correct) scoreRef.current += 1;
-                  return r.feedback;
-                })
-              }
-              onFinish={(score) => void finish(score)}
-              startAt={state?.myAnswered ?? 0}
-              initialScore={state?.myScore ?? 0}
-            />
+            <>
+              <div className="mb-3 space-y-2">
+                {state?.endMode === "race" ? (
+                  <p className="rounded-xl bg-amber-50 px-4 py-2 text-center text-sm font-bold text-amber-800">🏁 Poyga — birinchi tugatgan g'olib!</p>
+                ) : null}
+                {timeLeftSec !== null ? (
+                  <p
+                    className={cn(
+                      "rounded-xl px-4 py-2.5 text-center text-base font-bold",
+                      timeLeftSec <= 30 ? "bg-red-100 text-red-700" : "bg-indigo-50 text-indigo-700"
+                    )}
+                  >
+                    ⏱ Qoldi: {Math.floor(timeLeftSec / 60)}:{String(timeLeftSec % 60).padStart(2, "0")}
+                  </p>
+                ) : null}
+              </div>
+              <QuestionFlow
+                questions={questions}
+                onAnswer={(qIndex, choice) =>
+                  actionPortalRoomAnswer(code, qIndex, choice).then((r) => {
+                    if (!r.ok) throw new Error(r.error);
+                    if (r.feedback.correct) scoreRef.current += 1;
+                    return r.feedback;
+                  })
+                }
+                onFinish={(score) => void finish(score)}
+                startAt={state?.myAnswered ?? 0}
+                initialScore={state?.myScore ?? 0}
+              />
+            </>
           ) : phase === "done" ? (
             <div className="flex flex-col items-center gap-4 py-6 text-center">
               {state?.winnerSlot ? (

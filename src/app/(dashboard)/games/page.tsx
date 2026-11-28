@@ -5,9 +5,13 @@ import { Button, Card, EmptyState } from "@/components/ui";
 import { Badge } from "@/components/ui";
 import { GAME_TYPES } from "@/lib/books/types";
 import { listCustomGames } from "@/lib/books/custom";
-import { listBookMetas, listResults } from "@/lib/books/store";
+import { getBook, listBookMetas, listResults } from "@/lib/books/store";
 import { summarizeGameResults } from "@/lib/books/game-stats";
 import { CustomGameList } from "@/components/games/CustomGameList";
+import { PortalGamesManager, type PortalGameRow } from "@/components/games/PortalGamesManager";
+import { listClosedGameKeys } from "@/lib/portal/visibility";
+import { pointsForSubject } from "@/lib/portal/points";
+import { SUBJECTS, type SubjectKey } from "@/lib/books/types";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +22,39 @@ export default async function GamesPage() {
     listResults(),
   ]);
   const stats = summarizeGameResults(results, 0);
+
+  // ------- Bolalar portalida ko'rinadigan o'yinlar (yopish/ochish) -------
+  const closedKeys = await listClosedGameKeys();
+  const subjectLabel = (key: string) => SUBJECTS[key as SubjectKey]?.label ?? key;
+  const portalRows: PortalGameRow[] = [];
+  for (const g of games) {
+    if (g.type === "bingo") continue; // doska formati portalda yo'q
+    portalRows.push({
+      key: `custom:${g.id}`,
+      title: g.title,
+      origin: "O'qituvchi o'yini",
+      subjectLabel: subjectLabel(g.subject),
+      points: pointsForSubject(g.subject),
+      closed: closedKeys.has(`custom:${g.id}`),
+    });
+  }
+  for (const b of books) {
+    const full = await getBook(b.id);
+    if (!full) continue;
+    for (const topic of full.topics) {
+      for (const game of topic.games) {
+        if (game.type === "bingo") continue;
+        portalRows.push({
+          key: `book:${b.id}:${topic.id}:${game.id}`,
+          title: game.title,
+          origin: `Kitob: ${b.title} · ${topic.title}`,
+          subjectLabel: subjectLabel(b.subject),
+          points: pointsForSubject(b.subject),
+          closed: closedKeys.has(`book:${b.id}:${topic.id}:${game.id}`),
+        });
+      }
+    }
+  }
 
   return (
     <>
@@ -81,6 +118,8 @@ export default async function GamesPage() {
           </Card>
         </Link>
       </div>
+
+      <PortalGamesManager items={portalRows} />
 
       <h2 className="mb-3 text-sm font-semibold text-slate-900">
         Mening o'yinlarim {games.length ? `(${games.length})` : ""}

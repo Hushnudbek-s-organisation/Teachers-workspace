@@ -362,11 +362,12 @@ export async function actionPortalJoinRoom(
   studentToken?: string
 ): Promise<JoinRoomResult> {
   try {
-    // Akkauntidan kirgan bo'lsa — ismi avtomatik (forma bo'sh ham bo'lsa)
+    // Akkauntidan kirgan bo'lsa — ismi AVTOMATIK (hech nima so'ralmaydi).
+    // Akkauntsiz mehmonga avtomatik taxallus beriladi (ism so'ralmaydi).
     const identity = await guestIdentity();
     let clean = (nickname ?? "").trim().slice(0, 24);
     if (!clean && identity) clean = identity.firstName;
-    if (!clean) return { ok: false, error: "Taxallusni kiriting." };
+    if (!clean) clean = `Do'st-${Math.floor(100 + Math.random() * 900)}`;
 
     // Mehmon o'z shaxsiy linkini kiritgan bo'lsa — natija o'z profiliga yoziladi
     let linkedStudentId: string | null = null;

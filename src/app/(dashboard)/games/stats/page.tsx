@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { BarChart3, Gamepad2, Layers, Trophy, Users } from "lucide-react";
+import { BarChart3, Gamepad2, Trophy, Users } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge, Card, EmptyState } from "@/components/ui";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { RecentResults } from "@/components/games/RecentResults";
 import { StatsFilters } from "@/components/games/StatsFilters";
+import { StatsResetButton } from "@/components/games/StatsResetButton";
 import { GAME_TYPES } from "@/lib/books/types";
 import { listBookMetas, listResults } from "@/lib/books/store";
 import { listCustomGames } from "@/lib/books/custom";
@@ -42,10 +43,20 @@ export default async function GameStatsPage({
   ]);
 
   const studentById = new Map(students.map((s) => [s.id, s]));
-  const resultsWithClass = results.map((r) => ({
-    r,
-    student: r.studentId ? studentById.get(r.studentId) : undefined,
-  }));
+  // Talab: statistikada MEHMON (o'quvchi bog'lanmagan) yozuvlari KO'RINMAYDI —
+  // faqat kiritilgan o'quvchilarning ismlari bilan.
+  const resultsWithClass = results
+    .map((r) => ({ r, student: r.studentId ? studentById.get(r.studentId) : undefined }))
+    .filter(({ student }) => Boolean(student));
+
+  // Ballar (ona-tili=4, matematika=2)
+  const pointsByStudent = new Map<string, number>();
+  for (const { r } of resultsWithClass) {
+    if (!r.studentId) continue;
+    const p = r.points ?? 0;
+    pointsByStudent.set(r.studentId, (pointsByStudent.get(r.studentId) ?? 0) + p);
+  }
+  const totalPoints = [...pointsByStudent.values()].reduce((a, b) => a + b, 0);
 
   // ------------------------------ Filtrlash ------------------------------
   const filtered = resultsWithClass.filter(({ r, student }) => {
@@ -77,6 +88,7 @@ export default async function GameStatsPage({
       percent: r.percent ?? (r.total ? Math.round((r.score / r.total) * 100) : 0),
       timeLabel: formatDuration(r.timeSec),
       modeLabel: r.mode === "duo" ? "🤝 Juftlik" : r.mode === "solo" ? "👤 Yakka" : r.source === "portal" ? "👤 Yakka" : "",
+      points: r.points ?? 0,
     };
   });
 
@@ -95,9 +107,12 @@ export default async function GameStatsPage({
         title="O'yinlar statistikasi"
         description="Kitob, o'qituvchi va o'quvchi portali o'yinlari bo'yicha saqlangan natijalar — o'quvchi, sinf, o'yin va sana kesimida"
         action={
-          <div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 sm:flex">
-            <Gamepad2 className="h-4 w-4 text-indigo-600" />
-            {customGames.length} o'qituvchi o'yini · {books.length} kitob
+          <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 sm:flex">
+              <Gamepad2 className="h-4 w-4 text-indigo-600" />
+              {customGames.length} o'qituvchi o'yini · {books.length} kitob
+            </div>
+            <StatsResetButton />
           </div>
         }
       />
@@ -155,10 +170,10 @@ export default async function GameStatsPage({
               tone="emerald"
             />
             <MetricCard
-              label="Ism bilan saqlanganlar"
-              value={String(summary.guest)}
-              hint="O'quvchi tanlanmagan yozuvlar"
-              icon={<Layers className="h-5 w-5" />}
+              label="Jami ballar"
+              value={String(totalPoints)}
+              hint="Ona tili +4 · Matematika +2 · Kunlik majburiy +6"
+              icon={<Trophy className="h-5 w-5" />}
               tone="violet"
             />
           </div>
@@ -190,10 +205,16 @@ export default async function GameStatsPage({
                       {!row.studentId ? <span className="ml-1 text-[10px] text-slate-400">· ism</span> : null}
                     </span>
                     <span className="text-xs text-slate-400">{row.played} o'yin</span>
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                      {pointsByStudent.get(row.studentId ?? "") ?? 0} ball
+                    </span>
                     <span className="font-semibold text-emerald-600">{row.percent}%</span>
                   </div>
                 ))}
               </div>
+              <p className="mt-2 border-t border-slate-100 pt-2 text-[10px] text-slate-400">
+                Ballar: ona tili o'yinlari +4 ball, matematika +2 ball (har yakunlangan o'yin uchun).
+              </p>
             </Card>
 
             {/* ---------------------------- O'yinlar kesimida --------------------------- */}

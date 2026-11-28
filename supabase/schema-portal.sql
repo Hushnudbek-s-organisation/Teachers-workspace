@@ -11,7 +11,8 @@
 --       (javob kaliti faqat serverda: brauzerga chiqmaydi)
 --    4. game_rooms / game_room_progress — ikki qurilmada "Do'stim bilan
 --       o'ynash" xonalari (muddatli, 3-kishi qabul qilinmaydi)
---    5. game_results — yangi ustunlar: mode, percent, source (idempotent)
+--    5. game_results — yangi ustunlar: mode, percent, points (BALL), source
+--    6b. portal_closed_games — o'qituvchi bolalardan yopgan o'yinlar
 --
 --  RLS: barcha yangi jadvallar RLS yoqilgan. `anon` rollarga HECH QANDAY
 --  siyosat BERILMAYDI (default deny) — anon kalit egasi hech narsa o'qiy olmaydi.
@@ -162,9 +163,13 @@ create table if not exists game_room_progress (
 -- ---------------------------------------------------------------------------
 alter table game_results add column if not exists mode   text;             -- solo | duo | null(dashboard)
 alter table game_results add column if not exists percent smallint;        -- 0..100
+alter table game_results add column if not exists points  smallint not null default 0;      -- BALL: ona-tili=4, matematika=2
 alter table game_results add column if not exists source text not null default 'dashboard'; -- portal | dashboard
 
 create index if not exists idx_results_mode on game_results (mode);
+-- Tezlik: o'quvchining bugungi o'yinlari (kunlik majburiy tekshiruv) + statistika
+create index if not exists idx_results_student_created on game_results (student_id, created_at desc);
+create index if not exists idx_results_game on game_results (game_id);
 
 -- ---------------------------------------------------------------------------
 -- 6. CUSTOM_GAMES — portalga ulashish belgisi
@@ -172,6 +177,17 @@ create index if not exists idx_results_mode on game_results (mode);
 --    bunday o'yinlar o'quvchi portaliga AVTOMATIK chiqmaydi.
 -- ---------------------------------------------------------------------------
 alter table custom_games add column if not exists for_students boolean not null default true;
+
+-- ---------------------------------------------------------------------------
+-- 6b. YOPILGAN O'YINLAR (o'qituvchi bolalar portalidan yopadi — faqat u ochadi)
+--     Faqat YOPILGAN o'yinlar kalitlari saqlanadi.
+-- ---------------------------------------------------------------------------
+create table if not exists portal_closed_games (
+  key       text primary key,
+  closed_at timestamptz not null default now()
+);
+
+alter table portal_closed_games enable row level security;
 
 -- ---------------------------------------------------------------------------
 -- 7. RLS — yangi jadvallar ham xuddi schema.sql dagi kabi:
@@ -195,7 +211,8 @@ begin
   end if;
 
   foreach t in array array['teacher_accounts','teacher_sessions','teacher_class_access',
-                           'student_links','game_sessions','game_rooms','game_room_progress']
+                           'student_links','game_sessions','game_rooms','game_room_progress',
+                           'portal_closed_games']
   loop
     execute format('drop policy if exists "%1$s_select" on %1$s;', t);
     execute format('drop policy if exists "%1$s_insert" on %1$s;', t);
@@ -224,7 +241,7 @@ actual as (
     (select count(*) from expected e where exists (select 1 from information_schema.tables x
         where x.table_schema = 'public' and x.table_name = e.t))                                    as tables_n,
     (select count(*) from information_schema.columns where table_schema = 'public'
-        and table_name = 'game_results' and column_name in ('mode','percent','source'))             as result_cols_n,
+        and table_name = 'game_results' and column_name in ('mode','percent','points','source'))    as result_cols_n,
     (select count(*) from information_schema.columns where table_schema = 'public'
         and table_name = 'custom_games' and column_name = 'for_students')                           as games_flag_n,
     (select count(*) from pg_indexes where schemaname = 'public'
@@ -232,15 +249,19 @@ actual as (
     (select count(*) from information_schema.columns where table_schema = 'public'
         and table_name = 'game_rooms'
         and column_name in ('end_mode','time_limit_min','winner_slot'))                             as room_mode_cols_n,
+    (select count(*) from information_schema.tables where table_schema = 'public'
+        and table_name = 'portal_closed_games')                                                     as closed_n,
+    (select count(*) from information_schema.columns where table_schema = 'public'
+        and table_name = 'game_results' and column_name = 'points')                                 as points_n,
     (select count(*) from expected e where exists (select 1 from pg_class c
         join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public' and c.relname = e.t and c.relrowsecurity))                       as rls_n
 )
 select
-  a.tables_n     as "Yangi jadvallar (7)",
-  case when a.tables_n = 7 then '✅' else '❌' end as "Holat-1",
-  a.result_cols_n as "game_results yangi ustunlar (3)",
-  case when a.result_cols_n = 3 then '✅' else '❌' end as "Holat-2",
+  a.tables_n     as "Yangi jadvallar (8)",
+  case when a.tables_n = 8 then '✅' else '❌' end as "Holat-1",
+  a.result_cols_n as "game_results yangi ustunlar (4)",
+  case when a.result_cols_n = 4 then '✅' else '❌' end as "Holat-2",
   a.games_flag_n as "custom_games.for_students",
   case when a.games_flag_n = 1 then '✅' else '❌' end as "Holat-3",
   a.link_idx_n   as "student_links faol-indeks",
@@ -248,7 +269,11 @@ select
   a.rls_n        as "RLS yoqilgan jadvallar (7)",
   case when a.rls_n = 7 then '✅' else '❌' end as "Holat-5",
   a.room_mode_cols_n as "game_rooms rejim ustunlari (3)",
-  case when a.room_mode_cols_n = 3 then '✅' else '❌' end as "Holat-6"
+  case when a.room_mode_cols_n = 3 then '✅' else '❌' end as "Holat-6",
+  a.closed_n as "portal_closed_games",
+  case when a.closed_n = 1 then '✅' else '❌' end as "Holat-7",
+  a.points_n as "game_results.points",
+  case when a.points_n = 1 then '✅' else '❌' end as "Holat-8"
 from actual a;
 
 -- ============================================================================

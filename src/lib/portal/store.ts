@@ -1,4 +1,5 @@
 import "server-only";
+import { cached, invalidateCache } from "@/lib/cache";
 
 // ============================================================================
 // Portal saqlash qatlami — linklar, o'yin sessiyalari, ikki qurilmali xonalar.
@@ -360,19 +361,43 @@ export interface PortalResultRow {
   time_sec: number;
   mode: "solo" | "duo" | null;
   percent: number;
+  /** Ball tizimi: ona-tili=4, matematika=2 (points.ts) */
+  points: number;
   source: "portal" | "dashboard";
   created_at: string;
 }
 
-/** attempt id bo'yicha yozish: mavjud bo'lsa YANGI QATOR YOZILMAYDI */
+/** attempt id bo'yicha yozish: mavjud bo'lsa YANGI QATOR YOZILMAYDI.
+ *  Ballar shu yerda hisoblanadi (ona-tili=4, matematika=2 — points.ts). */
 export async function saveResultIdempotent(row: PortalResultRow): Promise<{ saved: boolean }> {
+  if (!row.points) {
+    try {
+      const { pointsForSubject, subjectForGameKey, DAILY_POINTS } = await import("@/lib/portal/points");
+      row.points = pointsForSubject(await subjectForGameKey(row.game_id));
+      // KUNLIK MAJBURIY O'YIN → fandan qat'i nazar 6 ball.
+      // Server o'zi tekshiradi (mijoz yuborgan bayrog'iga ishonch yo'q);
+      // faqat portal o'yinlari uchun — dashboard sinovlari oddiy fan balli oladi.
+      if (row.source === "portal" && row.student_id) {
+        const { isTodayDailyGameKey } = await import("@/lib/portal/catalog");
+        if (await isTodayDailyGameKey(row.game_id, row.student_id)) row.points = DAILY_POINTS;
+      }
+    } catch {
+      row.points = 2;
+    }
+  }
   if (!isSupabase()) {
     const d = demo();
     if (d.results.has(row.id)) return { saved: false };
     d.results.set(row.id, row);
+    invalidateCache("results:");
+    invalidateCache("portal:results");
     return { saved: true };
   }
   const res = await sb().from("game_results").upsert(row, { onConflict: "id", ignoreDuplicates: true }).select("id");
+  if ((res.data?.length ?? 0) > 0) {
+    invalidateCache("results:");
+    invalidateCache("portal:results");
+  }
   // ignoreDuplicates + select → yangi qator qaytadi, mavjud bo'lsa bo'sh
   return { saved: (res.data?.length ?? 0) > 0 };
 }
@@ -383,15 +408,52 @@ export async function getResultById(id: string): Promise<PortalResultRow | null>
   return (res.data as PortalResultRow | null) ?? null;
 }
 
-/** Barcha portal natijalari (demo rejimda statistika sahifasi bilan umumiy ombor) */
-export async function listAllPortalResults(): Promise<PortalResultRow[]> {
-  if (!isSupabase()) return [...demo().results.values()];
+/** O'quvchi BUGUN (Toshkent vaqti bilan) tugatgan o'yinlar kalitlari.
+ *  Kunlik majburiy o'yin bajarilganini tekshirish uchun. */
+export async function studentTodayGameKeys(studentId: string): Promise<Set<string>> {
+  if (!studentId) return new Set();
+  const dateKey = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const since = new Date(`${dateKey}T00:00:00+05:00`).toISOString();
+  if (!isSupabase()) {
+    const keys = new Set<string>();
+    for (const r of demo().results.values()) {
+      if (r.student_id === studentId && r.created_at >= since) keys.add(r.game_id);
+    }
+    return keys;
+  }
   const res = await sb()
     .from("game_results")
-    .select("*")
-    .eq("source", "portal")
-    .order("created_at", { ascending: false });
-  return ((res.data ?? []) as PortalResultRow[]);
+    .select("game_id")
+    .eq("student_id", studentId)
+    .gte("created_at", since);
+  return new Set(((res.data ?? []) as Array<{ game_id: string }>).map((row) => row.game_id));
+}
+
+/** STATISTIKANI TO'LIQ TOZALASH — hamma game_results o'chiriladi */
+export async function resetGameResults(): Promise<number> {
+  invalidateCache("results:");
+  invalidateCache("portal:results");
+  if (!isSupabase()) {
+    const d = demo();
+    const n = d.results.size;
+    d.results.clear();
+    return n;
+  }
+  const res = await sb().from("game_results").delete().neq("id", "").select("id");
+  return res.data?.length ?? 0;
+}
+
+/** Barcha portal natijalari (demo rejimda statistika sahifasi bilan umumiy ombor) */
+export async function listAllPortalResults(): Promise<PortalResultRow[]> {
+  return cached("portal:results", 5_000, async () => {
+    if (!isSupabase()) return [...demo().results.values()];
+    const res = await sb()
+      .from("game_results")
+      .select("*")
+      .eq("source", "portal")
+      .order("created_at", { ascending: false });
+    return ((res.data ?? []) as PortalResultRow[]);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -636,6 +698,7 @@ export function buildResultRow(input: {
     time_sec: Math.max(0, Math.round(input.timeSec)),
     mode: input.mode,
     percent: percentOf(input.score, input.total),
+    points: 0,
     source: input.source ?? "portal",
     created_at: new Date().toISOString(),
   };

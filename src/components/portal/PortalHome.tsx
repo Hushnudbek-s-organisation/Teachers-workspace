@@ -20,15 +20,30 @@ const SOURCE_BADGE: Record<CatalogEntry["source"], { label: string; cls: string 
   practice: { label: "Mashq o'yini", cls: "border-amber-200 bg-amber-50 text-amber-700" },
 };
 
+export interface DailyGameInfo {
+  key: string;
+  title: string;
+  emoji: string;
+  points: number;
+  done: boolean;
+}
+
 export function PortalHome({
   token,
   student,
   catalog,
+  daily,
+  lockedKeys,
 }: {
   token: string;
   student: { firstName: string; classLabel: string };
   catalog: CatalogEntry[];
+  daily?: DailyGameInfo | null;
+  lockedKeys?: string[];
 }) {
+  const locked = new Set(lockedKeys ?? []);
+  const isLocked = (key: string) => locked.has(key);
+  const isDaily = (key: string) => daily?.key === key;
   // Brauzerga sessiya cookie'si (duo o'yinda mehmon sifatida bog'lanish uchun)
   useEffect(() => {
     actionPortalVisit(token).catch(() => undefined);
@@ -69,6 +84,30 @@ export function PortalHome({
           O'yinini tanla va o'yna! {practiceCount ? `· ${practiceCount} ta mashq o'yini har doim mavjud.` : ""}
         </p>
       </div>
+
+      {/* ⭐ Bugungi majburiy o'yin — bajarilmaguncha boshqalar yopiq */}
+      {daily && !daily.done ? (
+        <div className="mb-5 rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-yellow-50 px-5 py-4">
+          <p className="text-sm font-bold text-amber-900">
+            ⭐ Bugungi majburiy o'yin: {daily.emoji} {daily.title} (+{daily.points} ball)
+          </p>
+          <p className="mt-0.5 text-xs text-amber-800">
+            Bu o'yinni tugatmaguncha boshqa o'yinlar 🔒 yopiq. Mashq o'yinlari har doim ochiq.
+          </p>
+          <Link
+            href={`/o/${token}/g/${encodeURIComponent(daily.key)}`}
+            className="mt-2.5 inline-flex items-center gap-2 rounded-xl bg-amber-500 px-5 py-3 text-sm font-bold text-white hover:bg-amber-600 min-h-[48px]"
+          >
+            ▶ Hozir o'ynash
+          </Link>
+        </div>
+      ) : daily?.done ? (
+        <div className="mb-5 rounded-2xl border-2 border-emerald-200 bg-emerald-50 px-5 py-3">
+          <p className="text-sm font-semibold text-emerald-800">
+            ✅ Bugungi majburiy o'yin bajarildi (+{daily.points} ball) — hamma o'yinlar ochiq!
+          </p>
+        </div>
+      ) : null}
 
       {/* Do'stim bilan o'ynash — do'st xonasining KODini kiriting */}
       <div className="mb-5 rounded-2xl border-2 border-emerald-200 bg-emerald-50 px-5 py-4">
@@ -144,34 +183,72 @@ export function PortalHome({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {filtered.map((entry) => (
-            <Link
-              key={entry.key}
-              href={`/o/${token}/g/${encodeURIComponent(entry.key)}`}
-              className="group rounded-2xl border-2 border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-indigo-400 hover:shadow-md active:scale-[0.99]"
-            >
-              <div className="flex items-start gap-3">
-                <span className="text-4xl" aria-hidden>
-                  {entry.emoji}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-base font-bold text-slate-900">{entry.title}</p>
-                  <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{entry.instructions}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-semibold", SOURCE_BADGE[entry.source].cls)}>
-                      {SOURCE_BADGE[entry.source].label}
+          {filtered.map((entry) => {
+            const isDailyCard = isDaily(entry.key);
+            const cardLocked = isLocked(entry.key);
+            if (cardLocked) {
+              return (
+                <div
+                  key={entry.key}
+                  className="relative rounded-2xl border-2 border-slate-200 bg-slate-100 p-4 opacity-80"
+                  title="Bugungi majburiy o'yinni tugatganingizdan keyin ochiladi"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="text-4xl grayscale" aria-hidden>
+                      {entry.emoji}
                     </span>
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                      {entry.subject}
-                    </span>
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                      {entry.savollar} savol
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-base font-bold text-slate-500">{entry.title}</p>
+                      <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                        🔒 Yopiq — avval bugungi majburiy o'yinni tugatng
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </Link>
-          ))}
+              );
+            }
+            return (
+              <Link
+                key={entry.key}
+                href={`/o/${token}/g/${encodeURIComponent(entry.key)}`}
+                className={cn(
+                  "group rounded-2xl border-2 bg-white p-4 shadow-sm transition-all hover:shadow-md active:scale-[0.99]",
+                  isDailyCard ? "border-amber-400 hover:border-amber-500" : "border-slate-200 hover:border-indigo-400"
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="text-4xl" aria-hidden>
+                    {entry.emoji}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    {isDailyCard && daily ? (
+                      <p className="mb-0.5 text-[10px] font-black uppercase tracking-wide text-amber-600">
+                        ⭐ Bugungi majburiy · +{daily.points} ball
+                      </p>
+                    ) : null}
+                    <p className="text-base font-bold text-slate-900">{entry.title}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{entry.instructions}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-semibold", SOURCE_BADGE[entry.source].cls)}>
+                        {SOURCE_BADGE[entry.source].label}
+                      </span>
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                        {entry.subject}
+                      </span>
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                        {entry.savollar} savol
+                      </span>
+                      {!entry.practice && !isDailyCard ? (
+                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                          {entry.subject === "Ona tili" ? "+4" : "+2"} ball
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
 

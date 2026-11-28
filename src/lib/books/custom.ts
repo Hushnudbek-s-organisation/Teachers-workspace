@@ -2,6 +2,7 @@ import "server-only";
 import { MAX_CUSTOM_GAMES, MAX_CUSTOM_ITEMS } from "@/lib/config";
 import { isSupabaseConfigured } from "@/lib/repo";
 import { dbDeleteCustomGame, dbGetCustomGame, dbListCustomGames, dbUpsertCustomGame } from "./db";
+import { cached, invalidateCache } from "@/lib/cache";
 
 // ============================================================================
 // O'qituvchi o'zi yasagan o'yinlar
@@ -61,16 +62,20 @@ function withDerivedGroups(type: GameType, items: GameItem[], groups?: string[])
 }
 
 export async function listCustomGames(bookId?: string): Promise<CustomGame[]> {
-  if (isSupabaseConfigured()) return dbListCustomGames(bookId);
-  const all = await readAll();
-  const filtered = bookId ? all.filter((g) => g.bookId === bookId) : all;
-  return filtered.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+  return cached(`custom:list:${bookId ?? "all"}`, 10_000, async () => {
+    if (isSupabaseConfigured()) return dbListCustomGames(bookId);
+    const all = await readAll();
+    const filtered = bookId ? all.filter((g) => g.bookId === bookId) : all;
+    return filtered.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+  });
 }
 
 export async function getCustomGame(id: string): Promise<CustomGame | null> {
-  if (isSupabaseConfigured()) return dbGetCustomGame(id);
-  const all = await readAll();
-  return all.find((g) => g.id === id) ?? null;
+  return cached(`custom:one:${id}`, 30_000, async () => {
+    if (isSupabaseConfigured()) return dbGetCustomGame(id);
+    const all = await readAll();
+    return all.find((g) => g.id === id) ?? null;
+  });
 }
 
 export interface CustomGameInput {
@@ -91,6 +96,7 @@ export interface CustomGameInput {
 }
 
 export async function createCustomGame(input: CustomGameInput): Promise<CustomGame> {
+  invalidateCache("custom:");
   if (!GAME_TYPES[input.type]) throw new Error(`Noma'lum o'yin turi: ${String(input.type)}`);
   const items = normalizeItems(input.items.filter(Boolean), input.type).slice(0, MAX_CUSTOM_ITEMS);
   if (!items.length) throw new Error("O'yin uchun kamida bitta savol yoki juftlik kerak.");
@@ -157,6 +163,7 @@ export async function updateCustomGame(
   id: string,
   patch: Partial<CustomGameInput>
 ): Promise<CustomGame | null> {
+  invalidateCache("custom:");
   if (isSupabaseConfigured()) {
     const prev = await dbGetCustomGame(id);
     if (!prev) return null;
@@ -174,6 +181,7 @@ export async function updateCustomGame(
 }
 
 export async function deleteCustomGame(id: string): Promise<boolean> {
+  invalidateCache("custom:");
   if (isSupabaseConfigured()) return dbDeleteCustomGame(id);
   const all = await readAll();
   const next = all.filter((g) => g.id !== id);
