@@ -172,7 +172,7 @@ export default async function GameStatsPage({
             <MetricCard
               label="Jami ballar"
               value={String(totalPoints)}
-              hint="Ona tili +4 · Matematika +2"
+              hint="Ona tili +4 · Matematika +2 · Kunlik majburiy +6"
               icon={<Trophy className="h-5 w-5" />}
               tone="violet"
             />

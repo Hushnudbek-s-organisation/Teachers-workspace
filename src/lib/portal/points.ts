@@ -13,6 +13,9 @@ import "server-only";
 import { getBook, listBookMetas } from "@/lib/books/store";
 import { listCustomGames } from "@/lib/books/custom";
 
+/** Kunlik MAJBURIY o'yin balli — fandan qat'i nazar doim 6 */
+export const DAILY_POINTS = 6;
+
 export const SUBJECT_POINTS: Record<string, number> = {
   "ona-tili": 4,
   oqish: 4,

@@ -23,7 +23,7 @@ import { listBookMetas } from "@/lib/books/store";
 import type { BookMeta, Game } from "@/lib/books/types";
 import { SUBJECTS, type SubjectKey } from "@/lib/books/types";
 import { buildQuestionsFromGame, gameBoardEmoji } from "@/lib/portal/questions";
-import { pointsForSubject } from "@/lib/portal/points";
+import { DAILY_POINTS, pointsForSubject } from "@/lib/portal/points";
 import { studentTodayGameKeys } from "@/lib/portal/store";
 import {
   generatePracticeQuestions,
@@ -249,7 +249,27 @@ export async function dailyGameFor(info: StudentPortalInfo, catalog: CatalogEntr
   } catch {
     done = false;
   }
-  return { entry: picked, done, points: pointsForSubject(picked.subjectKey) };
+  // Kunlik majburiy o'yin balli — fandan qat'i nazar doim 6
+  return { entry: picked, done, points: DAILY_POINTS };
+}
+
+/** Saqlash vaqtidagi SERVER TEKSHIRUVI: bu natija bugungi kunlik majburiy
+ *  o'yin uchunmi? Mijoz "bu kunlik edi" deb yuborgan bayroqqa ishonch yo'q —
+ *  server o'quvchi sinfi + sana bo'yicha kunlik o'yinni qayta hisoblaydi. */
+export async function isTodayDailyGameKey(gameKey: string, studentId: string): Promise<boolean> {
+  if (!gameKey || !studentId || gameKey.startsWith("practice:")) return false;
+  try {
+    const { repo } = await import("@/lib/repo");
+    const students = await repo.listStudents();
+    const student = students.find((st) => st.id === studentId);
+    if (!student) return false;
+    const info = portalInfoFor(student);
+    const catalog = await buildPortalCatalog(info);
+    const daily = await dailyGameFor(info, catalog);
+    return daily?.entry.key === gameKey;
+  } catch {
+    return false;
+  }
 }
 
 /** Bu o'yin hozir o'ynashga yopiqmi? (kunlik majburiy bajarilmagan bo'lsa) */

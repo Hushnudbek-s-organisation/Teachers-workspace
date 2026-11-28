@@ -725,32 +725,54 @@ await section("8. BALLAR + YOPILGAN O'YINLAR + KUNLIK MAJBURIY", async () => {
   const sid = await createTestStudent("Ball Sinovi", "3-A");
   const info3 = portalInfoFor((await demoRepository.listStudents()).find((s) => s.id === sid)!);
 
-  // Ona tili o'yini → avtomatik 4 ball
+  // Bugungi kunlik o'yinni OLDINDA hisoblaymiz — testlar deterministik bo'lishi uchun
+  const catalog0 = await buildPortalCatalog(info3);
+  const daily0 = await dailyGameFor(info3, catalog0);
+  const onaKey = `custom:${onaGame.id}`;
+  const mathKey = `custom:${mathGame.id}`;
+  const onaIsDaily = daily0?.entry.key === onaKey;
+  const mathIsDaily = daily0?.entry.key === mathKey;
+
+  // Fan ballari (kunlik BO'LMAGAN o'yin bilan): ona-tili 4, matematika 2
+  const subjKey = onaIsDaily ? mathKey : onaKey;
+  const subjExpected = onaIsDaily ? 2 : 4;
   await saveResultIdempotent({
-    id: "points-ona-tili-1",
+    id: "points-subj-1",
     book_id: null, topic_id: null, topic_title: null,
-    game_id: `custom:${onaGame.id}`, game_title: "Ona tili", game_type: "quiz",
+    game_id: subjKey, game_title: "Fan sinovi", game_type: "quiz",
     student_id: sid, student_name: "Ball Sinovi",
     score: 2, total: 2, time_sec: 20, mode: "solo", percent: 100, points: 0,
     source: "portal", created_at: new Date().toISOString(),
   });
-  const rowOna = await getResultById("points-ona-tili-1");
-  check("saveResultIdempotent: ona-tili o'yiniga AVTOMATIK 4 ball", rowOna?.points === 4);
-  // Matematika o'yini → avtomatik 2 ball
-  await saveResultIdempotent({
-    id: "points-math-1",
-    book_id: null, topic_id: null, topic_title: null,
-    game_id: `custom:${mathGame.id}`, game_title: "Matematika", game_type: "quiz",
-    student_id: sid, student_name: "Ball Sinovi",
-    score: 2, total: 2, time_sec: 20, mode: "solo", percent: 100, points: 0,
-    source: "portal", created_at: new Date().toISOString(),
-  });
-  const rowMath = await getResultById("points-math-1");
-  check("saveResultIdempotent: matematika o'yiniga AVTOMATIK 2 ball", rowMath?.points === 2);
+  const rowSubj = await getResultById("points-subj-1");
+  check(`saveResultIdempotent: fan ballari avtomatik (${subjExpected} ball)`, rowSubj?.points === subjExpected);
   const { pointsForSubject } = await import("../src/lib/portal/points.ts");
   check("pointsForSubject: ona-tili → 4", pointsForSubject("ona-tili") === 4);
   check("pointsForSubject: matematika → 2", pointsForSubject("matematika") === 2);
   check("pointsForSubject: noma'lum → 2", pointsForSubject("ingliz-tili") === 2);
+  const { DAILY_POINTS } = await import("../src/lib/portal/points.ts");
+  check("DAILY_POINTS = 6", DAILY_POINTS === 6);
+
+  // KUNLIK MAJBURIY o'yin → fandan qat'i nazar 6 ball (server o'zi aniqlaydi).
+  // ALOHIDA o'quvchi — "Ball Sinovi" keyingi qulf-oqim testlari uchun toza qoladi.
+  if (daily0) {
+    const sidD = await createTestStudent("Kunlik O'yinchisi", "3-A");
+    const infoD = portalInfoFor((await demoRepository.listStudents()).find((x) => x.id === sidD)!);
+    const catalogD = await buildPortalCatalog(infoD);
+    const dailyD = await dailyGameFor(infoD, catalogD);
+    check("Kunlik o'yin o'quvchilar uchun BIR XIL kalit", dailyD?.entry.key === daily0.entry.key);
+    await saveResultIdempotent({
+      id: "points-daily-1",
+      book_id: null, topic_id: null, topic_title: null,
+      game_id: dailyD!.entry.key, game_title: dailyD!.entry.title, game_type: "quiz",
+      student_id: sidD, student_name: "Kunlik O'yinchisi",
+      score: 2, total: 2, time_sec: 30, mode: "solo", percent: 100, points: 0,
+      source: "portal", created_at: new Date().toISOString(),
+    });
+    const rowDaily = await getResultById("points-daily-1");
+    check("Kunlik majburiy o'yin → AVTOMATIK 6 ball", rowDaily?.points === 6);
+    check("daily.points ko'rsatkichi ham 6", dailyD!.points === 6);
+  }
 
   // YOPILGAN O'YINLAR: o'qituvchi yopsa katalogda ko'rinmaydi
   const s2 = await createTestStudent("Yopiq Sinov", "3-B");
@@ -775,7 +797,7 @@ await section("8. BALLAR + YOPILGAN O'YINLAR + KUNLIK MAJBURIY", async () => {
   check("Kunlik o'yin tanlandi", daily !== null);
   if (daily) {
     check("Kunlik: mashq o'yini emas", daily.entry.practice === false);
-    check("Kunlik ball: ona-tili=4 / matematika=2", daily.points === 4 || daily.points === 2);
+    check("Kunlik majburiy ball: 6", daily.points === 6);
     check("Boshlanida bajarilmagan", daily.done === false);
     // boshqa o'yin YOPIQ
     const other = catalog3.find((e) => !e.practice && e.key !== daily.entry.key);

@@ -372,8 +372,15 @@ export interface PortalResultRow {
 export async function saveResultIdempotent(row: PortalResultRow): Promise<{ saved: boolean }> {
   if (!row.points) {
     try {
-      const { pointsForSubject, subjectForGameKey } = await import("@/lib/portal/points");
+      const { pointsForSubject, subjectForGameKey, DAILY_POINTS } = await import("@/lib/portal/points");
       row.points = pointsForSubject(await subjectForGameKey(row.game_id));
+      // KUNLIK MAJBURIY O'YIN → fandan qat'i nazar 6 ball.
+      // Server o'zi tekshiradi (mijoz yuborgan bayrog'iga ishonch yo'q);
+      // faqat portal o'yinlari uchun — dashboard sinovlari oddiy fan balli oladi.
+      if (row.source === "portal" && row.student_id) {
+        const { isTodayDailyGameKey } = await import("@/lib/portal/catalog");
+        if (await isTodayDailyGameKey(row.game_id, row.student_id)) row.points = DAILY_POINTS;
+      }
     } catch {
       row.points = 2;
     }

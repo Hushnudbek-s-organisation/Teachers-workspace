@@ -204,12 +204,14 @@ yo'qligi uchun `NEXT_PUBLIC_SITE_URL` aniq ko'rsatilishi tavsiya etiladi.
 
 | Fan | Ball |
 |---|---|
+| ⭐ Kunlik MAJBURIY o'yin | **+6** (fandan qat'i nazar) |
 | Ona tili va o'qish | **+4** |
 | Matematika | **+2** |
 | Boshqa fanlar | +2 |
 
-Ballar serverda hisoblanadi (mijoz yuboradigan ball ishonchsiz), natija
-statistikada «Jami ballar» ustunida va o'yin kartalarida ko'rinadi.
+Ballar serverda hisoblanadi (mijoz yuboradigan ball ishonchsiz; kunlik
+majburiylik ham serverda qayta tekshiriladi), natija statistikada
+«Jami ballar» ustunida va o'yin kartalarida ko'rinadi.
 
 **Har kuni birinchi MAJBURIY o'yin** — bola portallarga kirganda tepada
 «⭐ Bugungi majburiy o'yin» banneri chiqadi. Uni tugatmaguncha boshqa o'yinlar

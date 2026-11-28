@@ -238,7 +238,7 @@ export function PortalHome({
                       <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600">
                         {entry.savollar} savol
                       </span>
-                      {!entry.practice ? (
+                      {!entry.practice && !isDailyCard ? (
                         <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
                           {entry.subject === "Ona tili" ? "+4" : "+2"} ball
                         </span>
