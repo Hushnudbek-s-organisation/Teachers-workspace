@@ -182,6 +182,7 @@ interface ResultRow {
   created_at: string;
   mode: string | null;
   percent: number | null;
+  points: number | null;
   source: string | null;
 }
 
@@ -200,6 +201,10 @@ function rowToResult(row: ResultRow): GameResult {
     total: row.total,
     timeSec: row.time_sec,
     createdAt: row.created_at,
+    mode: (row.mode as GameResult["mode"]) ?? null,
+    percent: row.percent,
+    points: row.points,
+    source: (row.source as GameResult["source"]) ?? "dashboard",
   };
 }
 
@@ -229,6 +234,10 @@ export async function dbSaveResult(result: GameResult): Promise<void> {
     total: result.total,
     time_sec: result.timeSec,
     created_at: result.createdAt,
+    mode: result.mode ?? null,
+    percent: result.percent ?? null,
+    points: result.points ?? 0,
+    source: result.source ?? "dashboard",
   });
   assertSchema(res.error, "game_results");
   });

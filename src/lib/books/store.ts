@@ -28,6 +28,7 @@ import { segmentBook, type BookPage, type SegmentReport } from "./segment";
 import { cleanExtractedText, keyphrases } from "./text";
 import { BOOK_KEYWORD_POOL, MAX_SAVED_RESULTS, UPLOAD_SESSION_TTL_MS } from "../config";
 import { isSupabaseConfigured } from "../repo";
+import { cached, invalidateCache } from "@/lib/cache";
 import { listAllPortalResults, saveResultIdempotent } from "../portal/store";
 import {
   dbDeleteBook,
@@ -106,17 +107,22 @@ export async function listUploadedBooks(): Promise<Book[]> {
 }
 
 export async function listBookMetas(): Promise<BookMeta[]> {
-  if (isSupabaseConfigured()) return dbListBookMetas();
-  const uploaded = await listUploadedBooks();
-  return uploaded.map(toMeta);
+  return cached("books:metas", 10_000, async () => {
+    if (isSupabaseConfigured()) return dbListBookMetas();
+    const uploaded = await listUploadedBooks();
+    return uploaded.map(toMeta);
+  });
 }
 
 export async function getBook(id: string): Promise<Book | null> {
-  if (isSupabaseConfigured()) return dbGetBook(id);
-  return readJson<Book>(path.join(BOOKS_DIR, `${slugify(id)}.json`));
+  return cached(`books:full:${id}`, 30_000, async () => {
+    if (isSupabaseConfigured()) return dbGetBook(id);
+    return readJson<Book>(path.join(BOOKS_DIR, `${slugify(id)}.json`));
+  });
 }
 
 export async function deleteBook(id: string): Promise<boolean> {
+  invalidateCache("books:");
   if (isSupabaseConfigured()) return dbDeleteBook(id);
   const file = path.join(BOOKS_DIR, `${slugify(id)}.json`);
   try {
@@ -239,6 +245,7 @@ export function ingestBook(input: IngestInput): IngestResult {
 }
 
 export async function saveBook(book: Book): Promise<void> {
+  invalidateCache("books:");
   if (isSupabaseConfigured()) return dbSaveBook(book);
   await writeJson(path.join(BOOKS_DIR, `${slugify(book.id)}.json`), book);
 }
@@ -315,6 +322,12 @@ export function finishUpload(id: string): { book: Book; report: SegmentReport } 
 // ---------------------------------------------------------------------------
 
 export async function listResults(bookId?: string): Promise<GameResult[]> {
+  return cached(`results:${bookId ?? "all"}`, 5_000, async () => {
+    return listResultsUncached(bookId);
+  });
+}
+
+async function listResultsUncached(bookId?: string): Promise<GameResult[]> {
   if (isSupabaseConfigured()) return dbListResults(bookId);
   // Demo rejim: dashboard (fayl) + portal (xotira) natijalari BIR joydan ko'rinadi
   const fileRows = (await readJson<GameResult[]>(RESULTS_FILE)) ?? [];
@@ -335,6 +348,7 @@ export async function listResults(bookId?: string): Promise<GameResult[]> {
     createdAt: r.created_at,
     mode: r.mode,
     percent: r.percent,
+    points: r.points,
     source: r.source,
   }));
   const all = [...fileRows, ...mapped];
@@ -349,6 +363,24 @@ export async function saveResult(result: Omit<GameResult, "id" | "createdAt">): 
       id: `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
       createdAt: new Date().toISOString(),
     };
+    // Ballar: ona-tili=4, matematika=2 (kitob subyekti yoki custom o'yindan)
+    try {
+      const { pointsForSubject } = await import("@/lib/portal/points");
+      let subject: string | null = null;
+      if (full.bookId) {
+        const { listBookMetas } = await import("@/lib/books/store");
+        const meta = (await listBookMetas()).find((b) => b.id === full.bookId);
+        subject = meta?.subject ?? null;
+      } else {
+        const { listCustomGames } = await import("@/lib/books/custom");
+        const cg = (await listCustomGames()).find((g) => g.id === full.gameId);
+        subject = cg?.subject ?? null;
+      }
+      full.points = pointsForSubject(subject);
+    } catch {
+      full.points = 2;
+    }
+    invalidateCache("results:");
     await dbSaveResult(full);
     return full;
   }
@@ -359,6 +391,7 @@ export async function saveResult(result: Omit<GameResult, "id" | "createdAt">): 
   };
   // Demo rejim: portal bilan BIR umumiy ombor (xotira) — statistika sahifasi
   // portal natijalarini ham ko'radi. Idempotent (xuddi shu id qayta yozilmaydi).
+  invalidateCache("results:");
   await saveResultIdempotent({
     id: full.id,
     book_id: full.bookId || null,
@@ -374,6 +407,7 @@ export async function saveResult(result: Omit<GameResult, "id" | "createdAt">): 
     time_sec: full.timeSec,
     mode: full.mode ?? null,
     percent: full.percent ?? (full.total ? Math.round((full.score / full.total) * 100) : 0),
+    points: full.points ?? 0,
     source: "dashboard",
     created_at: full.createdAt,
   });

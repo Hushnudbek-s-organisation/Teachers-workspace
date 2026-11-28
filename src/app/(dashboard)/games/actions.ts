@@ -78,3 +78,44 @@ export async function actionDeleteCustomGame(id: string) {
   revalidatePath("/games");
   return { ok };
 }
+
+// ---------------------------------------------------------------------------
+// O'QUVCHI PORTALIDA O'YINLARNI YOPISH/OCHISH (foydalanuvchi talabi)
+// Yopilgan o'yin bolalar katalogida umuman ko'rinmaydi — faqat o'qituvchi ochadi.
+// ---------------------------------------------------------------------------
+
+export async function actionTogglePortalGame(
+  gameKey: string,
+  open: boolean
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await requireTeacherAction();
+    if (!gameKey) throw new Error("O'yin kaliti bo'sh.");
+    const { closePortalGame, openPortalGame } = await import("@/lib/portal/visibility");
+    if (open) await openPortalGame(gameKey);
+    else await closePortalGame(gameKey);
+    revalidatePath("/games");
+    revalidatePath("/books");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Amal bajarilmadi." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// STATISTIKANI TO'LIQ TOZALASH (ikki bosqichli tasdiq klient tomonda)
+// Hamma game_results o'chiriladi; o'quvchilar/o'yinlar/havolalar o'zgarmaydi.
+// ---------------------------------------------------------------------------
+
+export async function actionResetGameResults(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await requireTeacherAction();
+    const { resetGameResults } = await import("@/lib/portal/store");
+    const n = await resetGameResults();
+    revalidatePath("/games/stats");
+    revalidatePath("/games");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Tozalash bajarilmadi." };
+  }
+}

@@ -198,11 +198,54 @@ O'qituvchi **O'quvchilar** sahifasida har bir bola uchun **shaxsiy havola** bera
 manzildan yasaladi) + 3 ta Supabase kaliti (yuqorida). Havolalarda ism/telefon
 yo'qligi uchun `NEXT_PUBLIC_SITE_URL` aniq ko'rsatilishi tavsiya etiladi.
 
+## ⭐ Ballar, kunlik majburiy o'yin va o'qituvchi nazorati (yangi)
+
+**Ballar tizimi** — har bir tugatgan o'yin uchun avtomatik ball:
+
+| Fan | Ball |
+|---|---|
+| Ona tili va o'qish | **+4** |
+| Matematika | **+2** |
+| Boshqa fanlar | +2 |
+
+Ballar serverda hisoblanadi (mijoz yuboradigan ball ishonchsiz), natija
+statistikada «Jami ballar» ustunida va o'yin kartalarida ko'rinadi.
+
+**Har kuni birinchi MAJBURIY o'yin** — bola portallarga kirganda tepada
+«⭐ Bugungi majburiy o'yin» banneri chiqadi. Uni tugatmaguncha boshqa o'yinlar
+🔒 berkilgan holda ko'rinadi (mashq o'yinlari doim ochiq). Kunlik o'yin
+Toshkent vaqti bilan sana + sinf darajasiga qarab tasodifiy tanlanadi va
+**~6/10 ehtimol bilan ona tili/o'qish** o'yini chiqadi (qolganlari 4/10).
+Tanlov server tomonda qilinadi — bolada almashtirish tugmasi yo'q. Majburiy
+o'yin sahifasi ham serverda qayta tekshiriladi: havolani bilib olsa ham,
+bajarilmaguncha boshqa o'yin ochilmaydi.
+
+**O'qituvchi nazorati** (/games sahifasida):
+
+- **«Bolalarga ko'rsatish»** tugmasi — har bir o'yin yonida. O'chirilsa o'yin
+  bolalar portalida UMUMAN ko'rinmaydi; faqat o'qituvchi qayta yoqadi.
+  Mashq o'yinlari doim ochiq.
+- **«Statistikani tozalash»** — statistika sahifasidagi tugma. Bosing,
+  tasdiqlash oynasida **O'CHIR** deb yozing — hamma o'yin natijalari o'chadi
+  (o'quvchilar, linklar, ballar uchun xavfsiz: faqat natijalar tozalanadi).
+- Statistikada **mehmon yozuvlari ko'rinmaydi** — faqat ro'yxatga kiritilgan
+  o'quvchilar ismlari bilan.
+
+**Sayt tezligi** — ko'p bolalar bir vaqtda o'ynasa: kitob/o'yin kataloglari,
+natijalar va yopilgan o'yinlar ro'yxati qisqa muddatli keshlanadi (har qanday
+yozish amali keshni darhol yangilaydi, eski ma'lumot ko'rinmaydi) va bazada
+o'quvchi+vaqt indeksi qo'shildi (migration v4 — pastdagi SQL).
+
+**Supabase migratsiyasi (v4)** — `supabase/schema-portal.sql` ni to'liq run
+qiling YOKI faqat `supabase/migration-v4-points-closed.sql` ni SQL Editor'da
+Run qiling. Run qilinmasa: ballar saqlanmaydi va «Bolalarga ko'rsatish»
+amali real bazada xato beradi (demo rejimda hammasi ishlaydi).
+
 ## Portal testlari
 
 ```bash
-npm run test:portal    # 117 tekshiruv: havola xavfsizligi, ruxsatlar, portal o'yinlari, duo xonalar
-npm run test:flows     # 49 tekshiruv: to'liq oqimlar — qo'shish→link→o'yin→statistika, 2 qurilma, filtrlar
+npm run test:portal    # 148 tekshiruv: havola xavfsizligi, ruxsatlar, ballar, kunlik majburiy, duo xonalar
+npm run test:flows     # 73 tekshiruv: to'liq oqimlar — qo'shish→link→o'yin→statistika, 2 qurilma, filtrlar
 npm run test:games     # o'yin dvigateli + ko'p kishilik
 npm run test:supabase  # Supabase yo'li (kitob→o'yin→natija)
 ```

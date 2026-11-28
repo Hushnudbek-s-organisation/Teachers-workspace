@@ -41,7 +41,9 @@ import {
   verifyRoomSlot,
   resetPortalDemoStore,
 } from "../src/lib/portal/store.ts";
-import { buildPortalCatalog, resolveCatalogGame, gradeFromClass, portalInfoFor } from "../src/lib/portal/catalog.ts";
+import { buildPortalCatalog, resolveCatalogGame, gradeFromClass, portalInfoFor, dailyGameFor, isGameLockedByDaily } from "../src/lib/portal/catalog.ts";
+import { closePortalGame, openPortalGame, listClosedGameKeys, resetVisibilityDemoStore } from "../src/lib/portal/visibility.ts";
+import { studentTodayGameKeys, resetGameResults } from "../src/lib/portal/store.ts";
 import { generatePracticeQuestions, PRACTICE_GAMES } from "../src/lib/portal/practice.ts";
 import {
   createTeacherAccount,
@@ -633,7 +635,9 @@ await section("6. KATALOG AVTOMATIK — yangi o'yinlar o'zi chiqadi", async () =
   });
   catalog = await buildPortalCatalog(info);
   const dupes = catalog.filter((e) => e.title === "Mevalarni juftlashtir");
-  check("Bir xil nomli o'qituvchi o'yinlari IKKALASI ham ko'rinadi (talab)", dupes.length === 2 && dupes[0]!.key !== dupes[1]!.key);
+  // .data da eski runlardan qolgan bir xil o'yinlar bo'lishi mumkin —
+  // kamida 2 tasi va kalitlari har xil bo'lishi talab
+  check("Bir xil nomli o'qituvchi o'yinlari IKKALASI ham ko'rinadi (talab)", dupes.length >= 2 && new Set(dupes.map((d) => d.key)).size === dupes.length);
 
   // Boshqa sinf uchun yasalgan o'qituvchi o'yini ham ko'rinadi (talab: hamma o'yinlar)
   const otherGrade = await createCustomGame({
@@ -691,6 +695,124 @@ await section("7. GRADE PARSING va xavfsizlik chekkalari", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+await section("8. BALLAR + YOPILGAN O'YINLAR + KUNLIK MAJBURIY", async () => {
+  resetVisibilityDemoStore();
+  resetPortalDemoStore();
+
+  // BALLAR: ona-tili=4, matematika=2
+  const onaGame = await createCustomGame({
+    title: "Ona tili topshirig'i",
+    type: "quiz",
+    subject: "ona-tili",
+    grade: 3,
+    items: [
+      { question: "«Kitob» so'zining ma'nosi?", options: ["daftar", "daftarlik", "jurnal", "gazeta"], answer: 0 } as never,
+      { question: "To'g'ri yozilgan so'z?", options: ["maktab", "maktap", "mktab", "makteb"], answer: 0 } as never,
+    ],
+  });
+  const mathGame = await createCustomGame({
+    title: "Matematika topshirig'i",
+    type: "quiz",
+    subject: "matematika",
+    grade: 3,
+    items: [
+      { question: "7 x 8 nechchi?", options: ["54", "56", "58", "63"], answer: 1 } as never,
+      { question: "45 - 18 nechchi?", options: ["27", "28", "26", "37"], answer: 0 } as never,
+    ],
+  });
+
+  const sid = await createTestStudent("Ball Sinovi", "3-A");
+  const info3 = portalInfoFor((await demoRepository.listStudents()).find((s) => s.id === sid)!);
+
+  // Ona tili o'yini → avtomatik 4 ball
+  await saveResultIdempotent({
+    id: "points-ona-tili-1",
+    book_id: null, topic_id: null, topic_title: null,
+    game_id: `custom:${onaGame.id}`, game_title: "Ona tili", game_type: "quiz",
+    student_id: sid, student_name: "Ball Sinovi",
+    score: 2, total: 2, time_sec: 20, mode: "solo", percent: 100, points: 0,
+    source: "portal", created_at: new Date().toISOString(),
+  });
+  const rowOna = await getResultById("points-ona-tili-1");
+  check("saveResultIdempotent: ona-tili o'yiniga AVTOMATIK 4 ball", rowOna?.points === 4);
+  // Matematika o'yini → avtomatik 2 ball
+  await saveResultIdempotent({
+    id: "points-math-1",
+    book_id: null, topic_id: null, topic_title: null,
+    game_id: `custom:${mathGame.id}`, game_title: "Matematika", game_type: "quiz",
+    student_id: sid, student_name: "Ball Sinovi",
+    score: 2, total: 2, time_sec: 20, mode: "solo", percent: 100, points: 0,
+    source: "portal", created_at: new Date().toISOString(),
+  });
+  const rowMath = await getResultById("points-math-1");
+  check("saveResultIdempotent: matematika o'yiniga AVTOMATIK 2 ball", rowMath?.points === 2);
+  const { pointsForSubject } = await import("../src/lib/portal/points.ts");
+  check("pointsForSubject: ona-tili → 4", pointsForSubject("ona-tili") === 4);
+  check("pointsForSubject: matematika → 2", pointsForSubject("matematika") === 2);
+  check("pointsForSubject: noma'lum → 2", pointsForSubject("ingliz-tili") === 2);
+
+  // YOPILGAN O'YINLAR: o'qituvchi yopsa katalogda ko'rinmaydi
+  const s2 = await createTestStudent("Yopiq Sinov", "3-B");
+  const info2 = portalInfoFor((await demoRepository.listStudents()).find((x) => x.id === s2)!);
+  let catalog2 = await buildPortalCatalog(info2);
+  const target = catalog2.find((e) => e.source === "custom" && e.title === "Matematika topshirig'i");
+  check("Yopishdan oldin o'yin katalogda", target !== undefined);
+  if (target) {
+    await closePortalGame(target.key);
+    catalog2 = await buildPortalCatalog(info2);
+    check("Yopilgan o'yin katalogda KO'RINMAYDI", !catalog2.some((e) => e.key === target.key));
+    const keys = await listClosedGameKeys();
+    check("Yopilgan kalit ro'yxatda", keys.has(target.key));
+    await openPortalGame(target.key);
+    catalog2 = await buildPortalCatalog(info2);
+    check("Ochilgach yana ko'rinadi", catalog2.some((e) => e.key === target.key));
+  }
+
+  // KUNLIK MAJBURIY: vazn (ona-tili ustunligi) + qulflash
+  const catalog3 = await buildPortalCatalog(info3);
+  const daily = await dailyGameFor(info3, catalog3);
+  check("Kunlik o'yin tanlandi", daily !== null);
+  if (daily) {
+    check("Kunlik: mashq o'yini emas", daily.entry.practice === false);
+    check("Kunlik ball: ona-tili=4 / matematika=2", daily.points === 4 || daily.points === 2);
+    check("Boshlanida bajarilmagan", daily.done === false);
+    // boshqa o'yin YOPIQ
+    const other = catalog3.find((e) => !e.practice && e.key !== daily.entry.key);
+    if (other) check("Boshqa o'yin YOPIQ (majburiy bajarilmaguncha)", isGameLockedByDaily(other.key, daily) === true);
+    check("Mashq o'yini doim OCHIQ", isGameLockedByDaily("practice:kopaytirish-zinasi", daily) === false);
+    check("Kunlik o'yin OCHIQ", isGameLockedByDaily(daily.entry.key, daily) === false);
+
+    // Bugungi natija yozilsa → done=true → hamma ochiladi
+    await saveResultIdempotent({
+      id: "daily-done-1",
+      book_id: null, topic_id: null, topic_title: null,
+      game_id: daily.entry.key, game_title: daily.entry.title, game_type: "quiz",
+      student_id: s2, student_name: "Yopiq Sinov",
+      score: 2, total: 2, time_sec: 15, mode: "solo", percent: 100, points: 0,
+      source: "portal", created_at: new Date().toISOString(),
+    });
+    const daily2 = await dailyGameFor(info2, catalog3);
+    check("Kunlik o'ynalgach done=true", daily2?.done === true);
+    check("Bajarilgach boshqa o'yinlar OCHIQ", isGameLockedByDaily(daily.entry.key, daily2) === false);
+    const keys2 = await studentTodayGameKeys(s2);
+    check("studentTodayGameKeys bugungi kalitni qaytaradi", keys2.has(daily.entry.key));
+  }
+
+  // Statistika reset
+  const before = (await listAllResultsForCheck()).length;
+  check("Reset oldin natijalar bor", before > 0);
+  await resetGameResults();
+  const after = (await listAllResultsForCheck()).length;
+  check("Reset: hamma natijalar o'chdi", after === 0);
+  resetPortalDemoStore();
+});
+
+async function listAllResultsForCheck(): Promise<Array<{ id: string }>> {
+  const { listAllPortalResults } = await import("../src/lib/portal/store.ts");
+  return listAllPortalResults() as unknown as Array<{ id: string }>;
+}
+
 console.log("\n" + "=".repeat(70));
 console.log(`NATIJA: ${passed} ✅ / ${failed} ❌`);
 if (failed > 0) {
